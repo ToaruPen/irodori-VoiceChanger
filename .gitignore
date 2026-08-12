@@ -1,0 +1,11 @@
+.build/
+.DS_Store
+.swiftpm/
+.worktrees/
+coverage/
+dist/
+node_modules/
+*.profraw
+*.profdata
+*.xcresult
+config/irodori-voicechanger.json

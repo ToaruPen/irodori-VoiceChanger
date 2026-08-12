@@ -1,0 +1,12 @@
+{
+  "name": "irodori-voicechanger-tooling",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "secretlint": "secretlint ."
+  },
+  "devDependencies": {
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.4",
+    "secretlint": "13.0.4"
+  }
+}

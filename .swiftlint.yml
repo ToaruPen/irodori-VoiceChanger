@@ -1,0 +1,34 @@
+included:
+  - Sources
+  - Tests
+excluded:
+  - .build
+  - dist
+strict: true
+reporter: xcode
+line_length:
+  warning: 180
+  error: 200
+function_body_length:
+  warning: 100
+  error: 120
+cyclomatic_complexity:
+  warning: 15
+  error: 20
+function_parameter_count:
+  warning: 7
+  error: 8
+type_body_length:
+  warning: 500
+  error: 600
+file_length:
+  warning: 700
+  error: 900
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+disabled_rules:
+  - opening_brace
+  - static_over_final_class
+  - trailing_comma
