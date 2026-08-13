@@ -6,6 +6,271 @@ import Testing
 @Suite("ReportTests")
 struct ReportTests {
     @Test
+    func summarizesSemanticEndpointDecisionsAndInferenceDuration() {
+        let sessionID = UUID()
+        let first = UUID()
+        let second = UUID()
+        let third = UUID()
+        let events = [
+            event(sessionID, first, 10, .semanticEndpointRequested),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: first,
+                timestampNanoseconds: 20,
+                name: .semanticEndpointCompleted,
+                stage: .speech,
+                metrics: .init(
+                    durationMilliseconds: 10,
+                    semanticProbabilityBucket: 3,
+                    semanticTurnComplete: true
+                )
+            ),
+            event(sessionID, second, 30, .semanticEndpointRequested),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: second,
+                timestampNanoseconds: 40,
+                name: .semanticEndpointCompleted,
+                stage: .speech,
+                metrics: .init(
+                    durationMilliseconds: 20,
+                    semanticProbabilityBucket: 0,
+                    semanticTurnComplete: false
+                )
+            ),
+            event(sessionID, third, 50, .semanticEndpointRequested),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: third,
+                timestampNanoseconds: 60,
+                name: .semanticEndpointFailed,
+                stage: .speech,
+                errorCode: .speechUnavailable,
+                metrics: .init(durationMilliseconds: 30)
+            ),
+            event(sessionID, third, 70, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.semanticEndpointRequestedCount == 3)
+        #expect(report.semanticEndpointCompleteCount == 1)
+        #expect(report.semanticEndpointIncompleteCount == 1)
+        #expect(report.semanticEndpointFailureCount == 1)
+        #expect(report.metrics[.semanticInferenceDuration]?.count == 3)
+        #expect(report.metrics[.semanticInferenceDuration]?.p50 == 20)
+        #expect(report.incomplete)
+    }
+
+    @Test
+    func unmatchedSemanticRequestMarksStoppedSessionIncomplete() {
+        let sessionID = UUID()
+        let utteranceID = UUID()
+        let events = [
+            event(sessionID, utteranceID, 1, .semanticEndpointRequested),
+            event(sessionID, utteranceID, 2, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.incomplete)
+    }
+
+    @Test
+    func summarizesEndpointFinalizationAttempts() {
+        let sessionID = UUID()
+        let first = UUID()
+        let second = UUID()
+        let events = [
+            event(sessionID, first, 100_000_000, .shadowEndpointFinalizeRequested),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: first,
+                timestampNanoseconds: 150_000_000,
+                name: .shadowEndpointFinalizeCompleted,
+                stage: .speech,
+                metrics: .init(durationMilliseconds: 50)
+            ),
+            event(sessionID, second, 200_000_000, .shadowEndpointFinalizeRequested),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: second,
+                timestampNanoseconds: 220_000_000,
+                name: .shadowEndpointFinalizeFailed,
+                stage: .speech,
+                errorCode: .speechUnavailable,
+                metrics: .init(durationMilliseconds: 20)
+            ),
+            event(sessionID, second, 230_000_000, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.endpointFinalizeRequestedCount == 2)
+        #expect(report.endpointFinalizeCompletedCount == 1)
+        #expect(report.endpointFinalizeFailureCount == 1)
+        #expect(report.metrics[.endpointFinalizeDuration]?.count == 2)
+        #expect(report.metrics[.endpointFinalizeDuration]?.p50 == 20)
+    }
+
+    @Test
+    func summarizesEndpointShadowAccuracyLeadAndSpeechResumption() {
+        let sessionID = UUID()
+        let first = UUID()
+        let second = UUID()
+        let events = [
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: first,
+                timestampNanoseconds: 100_000_000,
+                name: .shadowEndpointCandidate,
+                metrics: .init(
+                    endpointSilenceMilliseconds: 300,
+                    shadowCandidatePresent: true
+                )
+            ),
+            event(sessionID, first, 200_000_000, .shadowEndpointSpeechResumed),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: first,
+                timestampNanoseconds: 900_000_000,
+                name: .shadowEndpointFinalComparison,
+                metrics: .init(
+                    durationMilliseconds: 800,
+                    endpointSilenceMilliseconds: 300,
+                    shadowCandidatePresent: true,
+                    shadowCandidateMatchRatio: 1,
+                    shadowFinalCoverageRatio: 0.8
+                )
+            ),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: second,
+                timestampNanoseconds: 1_000_000_000,
+                name: .shadowEndpointCandidate,
+                metrics: .init(
+                    endpointSilenceMilliseconds: 300,
+                    shadowCandidatePresent: false
+                )
+            ),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: second,
+                timestampNanoseconds: 1_500_000_000,
+                name: .shadowEndpointFinalComparison,
+                metrics: .init(
+                    durationMilliseconds: 500,
+                    endpointSilenceMilliseconds: 300,
+                    shadowCandidatePresent: false,
+                    shadowCandidateMatchRatio: 0,
+                    shadowFinalCoverageRatio: 0
+                )
+            ),
+            event(sessionID, second, 1_600_000_000, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.endpointShadowSilenceMilliseconds == 300)
+        #expect(report.endpointShadowCandidateCount == 2)
+        #expect(report.endpointShadowCandidatePresentCount == 1)
+        #expect(report.endpointShadowSpeechResumedCount == 1)
+        #expect(report.metrics[.endpointCandidateToFinal]?.p50 == 500)
+        #expect(report.metrics[.endpointCandidateMatchRatio]?.p50 == 1)
+        #expect(report.metrics[.endpointFinalCoverageRatio]?.p50 == 0.8)
+    }
+
+    @Test
+    func summarizesDiscardedCandidateSynthesisWithoutContaminatingFinalMetrics() {
+        let sessionID = UUID()
+        let completedID = UUID()
+        let cancelledID = UUID()
+        let failedID = UUID()
+        let events = [
+            event(sessionID, completedID, 100_000_000, .shadowSynthesisStarted),
+            event(sessionID, completedID, 150_000_000, .shadowSynthesisHandshake),
+            event(sessionID, completedID, 500_000_000, .shadowSynthesisFirstAudio),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: completedID,
+                timestampNanoseconds: 700_000_000,
+                name: .shadowSynthesisCompleted,
+                metrics: .init(
+                    durationMilliseconds: 600,
+                    serverDurationMilliseconds: 500
+                )
+            ),
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: completedID,
+                timestampNanoseconds: 800_000_000,
+                name: .shadowSynthesisFinalComparison,
+                metrics: .init(
+                    shadowCandidatePresent: true,
+                    shadowCandidateMatchRatio: 1,
+                    shadowFinalCoverageRatio: 0.4
+                )
+            ),
+            event(sessionID, completedID, 900_000_000, .asrFinal),
+            event(sessionID, cancelledID, 1_000_000_000, .shadowSynthesisStarted),
+            event(sessionID, cancelledID, 1_100_000_000, .shadowSynthesisCancelled),
+            event(sessionID, failedID, 1_200_000_000, .shadowSynthesisStarted),
+            event(sessionID, failedID, 1_300_000_000, .shadowSynthesisFailed),
+            event(sessionID, completedID, 1_400_000_000, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.shadowSynthesisStartedCount == 3)
+        #expect(report.shadowSynthesisCompletedCount == 1)
+        #expect(report.shadowSynthesisCancelledCount == 1)
+        #expect(report.shadowSynthesisFailureCount == 1)
+        #expect(report.metrics[.shadowSynthesisRequestToHandshake]?.p50 == 50)
+        #expect(report.metrics[.shadowSynthesisRequestToFirstAudio]?.p50 == 400)
+        #expect(report.metrics[.shadowSynthesisRequestToComplete]?.p50 == 600)
+        #expect(report.metrics[.shadowSynthesisServerElapsed]?.p50 == 500)
+        #expect(report.metrics[.shadowSynthesisRequestMinusServer]?.p50 == 100)
+        #expect(report.metrics[.shadowSynthesisCandidateMatchRatio]?.p50 == 1)
+        #expect(report.metrics[.shadowSynthesisFinalCoverageRatio]?.p50 == 0.4)
+        #expect(report.metrics[.requestToFirstAudio] == nil)
+        #expect(report.playbackCompletedCount == 0)
+        #expect(report.failureCount == 0)
+    }
+
+    @Test
+    func summarizesStablePrefixShadowLeadAndAccuracy() {
+        let sessionID = UUID()
+        let utteranceID = UUID()
+        let events = [
+            event(sessionID, utteranceID, 100_000_000, .speechStarted),
+            event(sessionID, utteranceID, 300_000_000, .shadowPrefixCandidate),
+            event(sessionID, utteranceID, 400_000_000, .shadowPrefixCandidate),
+            event(sessionID, utteranceID, 500_000_000, .shadowPrefixRewrite),
+            event(sessionID, utteranceID, 600_000_000, .shadowPrefixRollback),
+            shadowComparisonEvent(
+                sessionID,
+                utteranceID,
+                900_000_000,
+                candidatePresent: true,
+                candidateMatchRatio: 1,
+                finalCoverageRatio: 0.6
+            ),
+            event(sessionID, utteranceID, 901_000_000, .asrFinal),
+            event(sessionID, utteranceID, 1_000_000_000, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.shadowCandidateUtteranceCount == 1)
+        #expect(report.shadowRewriteCount == 1)
+        #expect(report.shadowRollbackCount == 1)
+        #expect(report.metrics[.speechStartToShadowCandidate]?.p50 == 200)
+        #expect(report.metrics[.shadowCandidateToFinal]?.p50 == 600)
+        #expect(report.metrics[.shadowCandidateMatchRatio]?.p50 == 1)
+        #expect(report.metrics[.shadowFinalCoverageRatio]?.p50 == 0.6)
+    }
+
+    @Test
     func derivesPipelineIntervalsAndCompletionCounts() throws {
         let sessionID = UUID()
         let first = UUID()
@@ -75,6 +340,43 @@ struct ReportTests {
 
         #expect(report.incomplete)
         #expect(report.telemetryFailureCount == 1)
+    }
+
+    @Test
+    func unmatchedEndpointCandidateMarksStoppedSessionIncomplete() {
+        let sessionID = UUID()
+        let utteranceID = UUID()
+        let events = [
+            TelemetryEvent(
+                sessionID: sessionID,
+                utteranceID: utteranceID,
+                timestampNanoseconds: 1,
+                name: .shadowEndpointCandidate,
+                metrics: .init(
+                    endpointSilenceMilliseconds: 300,
+                    shadowCandidatePresent: true
+                )
+            ),
+            event(sessionID, utteranceID, 2, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.incomplete)
+    }
+
+    @Test
+    func endpointQueueOverflowMarksStoppedSessionIncomplete() {
+        let sessionID = UUID()
+        let utteranceID = UUID()
+        let events = [
+            event(sessionID, utteranceID, 1, .shadowEndpointOverflow),
+            event(sessionID, utteranceID, 2, .sessionStopped),
+        ]
+
+        let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
+
+        #expect(report.incomplete)
     }
 
     @Test
@@ -216,6 +518,27 @@ struct ReportTests {
             name: .preflightCompleted,
             stage: stage,
             metrics: .init(durationMilliseconds: duration)
+        )
+    }
+
+    private func shadowComparisonEvent(
+        _ sessionID: UUID,
+        _ utteranceID: UUID,
+        _ timestamp: UInt64,
+        candidatePresent: Bool,
+        candidateMatchRatio: Double,
+        finalCoverageRatio: Double
+    ) -> TelemetryEvent {
+        TelemetryEvent(
+            sessionID: sessionID,
+            utteranceID: utteranceID,
+            timestampNanoseconds: timestamp,
+            name: .shadowFinalComparison,
+            metrics: .init(
+                shadowCandidatePresent: candidatePresent,
+                shadowCandidateMatchRatio: candidateMatchRatio,
+                shadowFinalCoverageRatio: finalCoverageRatio
+            )
         )
     }
 }

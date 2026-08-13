@@ -7,6 +7,40 @@ import Testing
 @Suite("AudioFileReplayTests")
 struct AudioFileReplayTests {
     @Test
+    func replayObservesActivityWithoutDroppingAnalyzerFrames() async throws {
+        let frameCount = 4_096
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try makeWave(frameCount: frameCount).write(to: url)
+        let format = try #require(
+            AVAudioFormat(
+                commonFormat: .pcmFormatFloat32,
+                sampleRate: 48_000,
+                channels: 1,
+                interleaved: false
+            ))
+        let collector = ActivityCollector()
+
+        let inputs = try AudioFileReplay.inputs(
+            from: url,
+            analysisFormat: format,
+            maximumBytes: 100_000,
+            maximumDurationSeconds: 1,
+            paced: false,
+            activityObserver: { sample in collector.append(sample) }
+        )
+        var replayedFrames = 0
+        for await input in inputs {
+            replayedFrames += Int(input.buffer.frameLength)
+        }
+
+        #expect(replayedFrames == frameCount)
+        #expect(collector.samples.count == 2)
+        #expect(collector.samples.allSatisfy { !$0.isSpeech })
+    }
+
+    @Test
     func replayPreservesEveryFrameWhenProducerOutrunsConsumer() async throws {
         let frameCount = 2_048 * 100
         let url = FileManager.default.temporaryDirectory
@@ -72,5 +106,18 @@ struct AudioFileReplayTests {
                 UInt8((value >> 16) & 0xFF), UInt8(value >> 24),
             ]
         )
+    }
+}
+
+private final class ActivityCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = [AudioActivitySample]()
+
+    var samples: [AudioActivitySample] {
+        lock.withLock { storage }
+    }
+
+    func append(_ sample: AudioActivitySample) {
+        lock.withLock { storage.append(sample) }
     }
 }

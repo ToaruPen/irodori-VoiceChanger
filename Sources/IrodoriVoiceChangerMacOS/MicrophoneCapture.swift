@@ -30,7 +30,8 @@ public final class MicrophoneCapture {
 
     public func start(
         analysisFormat: AVAudioFormat,
-        bufferFrames: AVAudioFrameCount
+        bufferFrames: AVAudioFrameCount,
+        activityObserver: (@Sendable (AudioActivitySample) -> Void)? = nil
     ) throws -> MicrophoneInput {
         guard !running else { throw MicrophoneCaptureError.alreadyRunning }
         running = true
@@ -56,14 +57,23 @@ public final class MicrophoneCapture {
             for await item in rawStream {
                 guard !Task.isCancelled else { break }
                 let buffer = item.value
+                let analysisBuffer: AVAudioPCMBuffer?
                 if naturalFormat == analysisFormat {
-                    if case .dropped = continuation.yield(AnalyzerInput(buffer: buffer)) {
-                        dropCounter.increment()
-                    }
+                    analysisBuffer = buffer
                 } else if let converter,
                     let converted = buffer.converted(using: converter, to: analysisFormat)
                 {
-                    if case .dropped = continuation.yield(AnalyzerInput(buffer: converted)) {
+                    analysisBuffer = converted
+                } else {
+                    analysisBuffer = nil
+                }
+                if let analysisBuffer {
+                    if let activityObserver,
+                        let sample = AudioActivity.sample(from: analysisBuffer)
+                    {
+                        activityObserver(sample)
+                    }
+                    if case .dropped = continuation.yield(AnalyzerInput(buffer: analysisBuffer)) {
                         dropCounter.increment()
                     }
                 }

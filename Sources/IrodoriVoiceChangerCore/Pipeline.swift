@@ -56,6 +56,7 @@ public actor VoiceChangerPipeline {
     private let clock: any MonotonicClock
     private let maximumPendingSynthesis: Int
     private let maximumPendingPlayback: Int
+    private let shadowMonitor: StablePrefixShadowMonitor?
 
     private var pendingSynthesis = [CommittedUtterance]()
     private var pendingPlayback = [QueuedAudio]()
@@ -80,7 +81,8 @@ public actor VoiceChangerPipeline {
         telemetry: any TelemetryRecording,
         clock: any MonotonicClock,
         maximumPendingSynthesis: Int,
-        maximumPendingPlayback: Int
+        maximumPendingPlayback: Int,
+        shadowMonitor: StablePrefixShadowMonitor? = nil
     ) {
         self.sessionID = sessionID
         self.synthesizer = synthesizer
@@ -89,6 +91,7 @@ public actor VoiceChangerPipeline {
         self.clock = clock
         self.maximumPendingSynthesis = maximumPendingSynthesis
         self.maximumPendingPlayback = maximumPendingPlayback
+        self.shadowMonitor = shadowMonitor
     }
 
     public func run(source: any SpeechEventSource) async throws {
@@ -100,6 +103,7 @@ public actor VoiceChangerPipeline {
 
     public func handle(_ event: SpeechEvent) async {
         guard acceptingEvents else { return }
+        await shadowMonitor?.observe(event)
         switch event {
         case .speechStarted(let utteranceID):
             await emit(.speechStarted, utteranceID: utteranceID, stage: .speech)
@@ -137,6 +141,7 @@ public actor VoiceChangerPipeline {
     public func stop() async {
         acceptingEvents = false
         await waitUntilIdle()
+        await shadowMonitor?.stop()
     }
 
     public func cancel() async {
@@ -149,6 +154,7 @@ public actor VoiceChangerPipeline {
         pendingPlayback.removeAll()
         synthesisTask?.cancel()
         playbackTask?.cancel()
+        await shadowMonitor?.cancel()
         for utterance in synthesis {
             await emit(.utteranceDropped, utteranceID: utterance.id, stage: .commit)
         }
@@ -403,6 +409,7 @@ public actor VoiceChangerPipeline {
         acceptingEvents = false
         synthesisTask?.cancel()
         playbackTask?.cancel()
+        await shadowMonitor?.cancel()
         let synthesis = pendingSynthesis
         let playback = pendingPlayback
         pendingSynthesis.removeAll()

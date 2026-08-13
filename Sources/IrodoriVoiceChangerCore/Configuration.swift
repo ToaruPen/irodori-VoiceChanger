@@ -268,7 +268,6 @@ public enum ConfigurationLoader {
             !configuration.localeIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             (128...8_192).contains(bufferFrames),
             bufferFrames.nonzeroBitCount == 1,
-            configuration.commitPolicy.mode == .finalOnly,
             (2...10).contains(configuration.commitPolicy.minimumObservations),
             (50...5_000).contains(configuration.commitPolicy.minimumStableMilliseconds)
         else {

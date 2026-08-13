@@ -6,8 +6,23 @@ public enum CLICommand: Equatable, Sendable {
     case configValidate(path: String?)
     case doctor(path: String?, synthesize: Bool)
     case devices
-    case run(path: String?, showTranscript: Bool)
-    case replay(input: String, path: String?, synthesize: Bool, liveOutput: Bool)
+    case run(
+        path: String?,
+        showTranscript: Bool,
+        shadowSynthesizePrefix: Bool,
+        endpointShadowMilliseconds: Int?,
+        shadowSmartTurn: Bool
+    )
+    case replay(
+        input: String,
+        path: String?,
+        synthesize: Bool,
+        liveOutput: Bool,
+        shadowSynthesizePrefix: Bool,
+        endpointShadowMilliseconds: Int?,
+        earlyFinalizeShadowMilliseconds: Int?,
+        smartTurnShadow: Bool
+    )
     case report(session: String, path: String?, json: Bool)
 }
 
@@ -38,11 +53,29 @@ public enum CLIParser {
         case "run":
             let options = try parseOptions(
                 Array(arguments.dropFirst()),
-                allowedFlags: ["--show-transcript"]
+                allowedFlags: [
+                    "--show-transcript", "--shadow-synthesize-prefix", "--shadow-smart-turn",
+                ],
+                allowedValues: ["--shadow-endpoint-ms"]
             )
+            let endpointShadowMilliseconds = try boundedMilliseconds(
+                options,
+                option: "--shadow-endpoint-ms"
+            )
+            let shadowSynthesizePrefix = options.flags.contains("--shadow-synthesize-prefix")
+            let shadowSmartTurn = options.flags.contains("--shadow-smart-turn")
+            guard
+                !shadowSmartTurn
+                    || (!shadowSynthesizePrefix && endpointShadowMilliseconds == nil)
+            else {
+                throw CLIUsageError()
+            }
             return .run(
                 path: options.path,
-                showTranscript: options.flags.contains("--show-transcript")
+                showTranscript: options.flags.contains("--show-transcript"),
+                shadowSynthesizePrefix: shadowSynthesizePrefix,
+                endpointShadowMilliseconds: endpointShadowMilliseconds,
+                shadowSmartTurn: shadowSmartTurn
             )
         case "replay":
             return try parseReplay(Array(arguments.dropFirst()))
@@ -70,13 +103,49 @@ public enum CLIParser {
         }
         let options = try parseOptions(
             Array(arguments.dropFirst()),
-            allowedFlags: ["--synthesize", "--live-output"]
+            allowedFlags: [
+                "--synthesize", "--live-output", "--shadow-synthesize-prefix",
+                "--shadow-smart-turn",
+            ],
+            allowedValues: ["--shadow-endpoint-ms", "--shadow-early-finalize-ms"]
         )
+        let synthesize = options.flags.contains("--synthesize")
+        let liveOutput = options.flags.contains("--live-output")
+        let shadowSynthesizePrefix = options.flags.contains("--shadow-synthesize-prefix")
+        let smartTurnShadow = options.flags.contains("--shadow-smart-turn")
+        let endpointShadowMilliseconds = try boundedMilliseconds(
+            options,
+            option: "--shadow-endpoint-ms"
+        )
+        let earlyFinalizeShadowMilliseconds = try boundedMilliseconds(
+            options,
+            option: "--shadow-early-finalize-ms"
+        )
+        guard !shadowSynthesizePrefix || synthesize else { throw CLIUsageError() }
+        guard
+            earlyFinalizeShadowMilliseconds == nil
+                || (!synthesize && !liveOutput && !shadowSynthesizePrefix
+                    && endpointShadowMilliseconds == nil)
+        else {
+            throw CLIUsageError()
+        }
+        guard
+            !smartTurnShadow
+                || (!synthesize && !liveOutput && !shadowSynthesizePrefix
+                    && endpointShadowMilliseconds == nil
+                    && earlyFinalizeShadowMilliseconds == nil)
+        else {
+            throw CLIUsageError()
+        }
         return .replay(
             input: input,
             path: options.path,
-            synthesize: options.flags.contains("--synthesize"),
-            liveOutput: options.flags.contains("--live-output")
+            synthesize: synthesize,
+            liveOutput: liveOutput,
+            shadowSynthesizePrefix: shadowSynthesizePrefix,
+            endpointShadowMilliseconds: endpointShadowMilliseconds,
+            earlyFinalizeShadowMilliseconds: earlyFinalizeShadowMilliseconds,
+            smartTurnShadow: smartTurnShadow
         )
     }
 
@@ -95,18 +164,21 @@ public enum CLIParser {
 
     private static func parseOptions(
         _ arguments: [String],
-        allowedFlags: Set<String>
+        allowedFlags: Set<String>,
+        allowedValues: Set<String> = []
     ) throws -> ParsedOptions {
-        var path: String?
+        var values = [String: String]()
         var flags = Set<String>()
         var index = 0
         while index < arguments.count {
             let argument = arguments[index]
-            if argument == "--path" {
-                guard path == nil, index + 1 < arguments.count else { throw CLIUsageError() }
+            if argument == "--path" || allowedValues.contains(argument) {
+                guard values[argument] == nil, index + 1 < arguments.count else {
+                    throw CLIUsageError()
+                }
                 let value = arguments[index + 1]
                 guard !value.hasPrefix("--") else { throw CLIUsageError() }
-                path = value
+                values[argument] = value
                 index += 2
             } else if allowedFlags.contains(argument) {
                 guard flags.insert(argument).inserted else { throw CLIUsageError() }
@@ -115,11 +187,24 @@ public enum CLIParser {
                 throw CLIUsageError()
             }
         }
-        return ParsedOptions(path: path, flags: flags)
+        return ParsedOptions(values: values, flags: flags)
     }
 
     private struct ParsedOptions {
-        let path: String?
+        let values: [String: String]
         let flags: Set<String>
+
+        var path: String? { values["--path"] }
+    }
+
+    private static func boundedMilliseconds(
+        _ options: ParsedOptions,
+        option: String
+    ) throws -> Int? {
+        guard let value = options.values[option] else { return nil }
+        guard let milliseconds = Int(value), (100...3_000).contains(milliseconds) else {
+            throw CLIUsageError()
+        }
+        return milliseconds
     }
 }

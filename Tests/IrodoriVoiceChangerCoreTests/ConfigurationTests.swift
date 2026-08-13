@@ -85,14 +85,17 @@ struct ConfigurationTests {
     }
 
     @Test
-    func unimplementedSpeculativeCommitModeFailsClosed() {
+    func stablePrefixShadowModeDecodesWithItsThresholds() throws {
         let json = validJSON.replacingOccurrences(
             of: #""mode": "final_only""#,
             with: #""mode": "stable_prefix""#
         )
-        #expect(throws: ConfigurationError.invalidValue) {
-            _ = try ConfigurationLoader.decode(Data(json.utf8))
-        }
+
+        let configuration = try ConfigurationLoader.decode(Data(json.utf8))
+
+        #expect(configuration.speech.commitPolicy.mode == .stablePrefix)
+        #expect(configuration.speech.commitPolicy.minimumObservations == 3)
+        #expect(configuration.speech.commitPolicy.minimumStableMilliseconds == 400)
     }
 
     @Test(arguments: [0, 65])

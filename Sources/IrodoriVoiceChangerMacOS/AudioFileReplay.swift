@@ -10,7 +10,8 @@ public enum AudioFileReplay {
         maximumBytes: Int,
         maximumDurationSeconds: Double,
         chunkFrames: Int = 2_048,
-        paced: Bool = true
+        paced: Bool = true,
+        activityObserver: (@Sendable (AudioActivitySample) -> Void)? = nil
     ) throws -> AsyncStream<AnalyzerInput> {
         let wave = try PCM16Wave.decode(
             Data(contentsOf: url, options: .mappedIfSafe),
@@ -53,14 +54,23 @@ public enum AudioFileReplay {
                         from: byteOffset..<(byteOffset + byteCount)
                     )
                     source.mutableAudioBufferList.pointee.mBuffers.mDataByteSize = UInt32(byteCount)
+                    let analysisBuffer: AVAudioPCMBuffer?
                     if sourceFormat == analysisFormat {
-                        continuation.yield(AnalyzerInput(buffer: source))
-                    } else if let converter,
-                        let converted = source.convertedForReplay(
+                        analysisBuffer = source
+                    } else if let converter {
+                        analysisBuffer = source.convertedForReplay(
                             using: converter,
                             to: analysisFormat)
-                    {
-                        continuation.yield(AnalyzerInput(buffer: converted))
+                    } else {
+                        analysisBuffer = nil
+                    }
+                    if let analysisBuffer {
+                        if let activityObserver,
+                            let sample = AudioActivity.sample(from: analysisBuffer)
+                        {
+                            activityObserver(sample)
+                        }
+                        continuation.yield(AnalyzerInput(buffer: analysisBuffer))
                     }
                     frameOffset += count
                     if paced {
