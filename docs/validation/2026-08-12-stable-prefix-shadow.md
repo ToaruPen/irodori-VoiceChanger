@@ -37,6 +37,7 @@ candidate failureは通常pipelineのfailure countやrestart判定へ混ぜな�
 ## 条件
 
 - macOS 26、Apple Speech `ja-JP`
+- measurement ID: `stable-prefix-baseline-4.558s`
 - 4.558秒、48kHz、mono、PCM16の同一固定WAV
 - detector sensitivity: medium
 - Irodori sampling profile: 12 steps / sway / neutral
@@ -130,7 +131,7 @@ final playback completionも5/5である。controlとの差はp50で数ms、p95�
 
 ## 実マイクでのdiscard-only検証
 
-同じ固定文を4回読むliveセッションでも、意図した4発話のcandidate requestはすべてfinal前に完了した。
+同じ固定文を4回読んだliveセッションでも、意図した4発話のcandidate requestはすべてfinal前に完了した。
 first audioはp50/p95 583.2/677.9ms、completeは595.3/694.9ms、server elapsedは567/578msで、
 candidate failure、cancel、rewrite、rollback、dropは0件だった。
 
@@ -201,7 +202,7 @@ cancel後の入力は無視し、final比較が欠けた候補を含むセッシ
 
 ### 末尾無音付き同一WAV
 
-既存の3.655秒、48kHz、mono、PCM16固定WAVへ3秒の無音を付加した。入力、detector sensitivity、
+measurement ID `endpoint-baseline-3.655s+3.000s-tail`では、既存の3.655秒、48kHz、mono、PCM16固定WAVへ3秒の無音を付加した。入力、detector sensitivity、
 stable-prefix設定は固定し、endpoint thresholdだけを変更した。300/500/700msは各5回、追加thresholdは
 各3回replayした。合成と再生は無効である。
 

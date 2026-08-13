@@ -3,7 +3,7 @@
 ## Goal
 
 Measure whether an endpoint candidate delivered before Apple Speech's normal end
-decision can reduce the roughly 2.1 second live finalization wait. This experiment
+decision can reduce the roughly 2.1-second live finalization wait. This experiment
 tests Apple `SpeechAnalyzer.finalize(through:)`, not Pipecat quality.
 
 ## Scope
@@ -57,7 +57,7 @@ threshold per replay. Compare with the existing unforced baseline using:
 - number of finalized chunks and speech resumptions.
 
 The experiment passes the mechanical gate only if forced finalization returns,
-publishes final results materially earlier than the roughly 2.1 second live baseline,
+publishes final results materially earlier than the roughly 2.1-second live baseline,
 and does not reduce candidate/final match on the fixed corpus. Passing does not enable
 active use. It only authorizes the next semantic-boundary shadow experiment.
 

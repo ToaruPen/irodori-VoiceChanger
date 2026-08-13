@@ -43,7 +43,7 @@ synthesis, BlackHole playback, sustained microphone input, Discord input routing
 one-variable latency experiments are recorded in
 `docs/validation/2026-08-12-initial-baseline.md`.
 
-### Task 1: Repository and deterministic toolchain
+## Task 1: Repository and deterministic toolchain
 
 **Files:**
 - Create: `Package.swift`
@@ -104,7 +104,7 @@ python3 ~/.codex/skills/agents-md-best-practices/scripts/agents_md_tool.py audit
 
 Expected: no errors and a root `AGENTS.md` under 300 lines.
 
-### Task 2: Typed telemetry and bottleneck report
+## Task 2: Typed telemetry and bottleneck report
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/Clock.swift`
@@ -156,7 +156,7 @@ Run: `swift test --filter TelemetryTests && bash scripts/coverage.sh`
 Expected: telemetry tests pass; the script reports core line coverage at least 90% or names the
 uncovered core lines and exits nonzero.
 
-### Task 3: Strict configuration and command parsing
+## Task 3: Strict configuration and command parsing
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/Configuration.swift`
@@ -200,7 +200,7 @@ Run: `swift test --filter 'ConfigurationTests|CLITests'`
 
 Expected: all configuration and grammar tests pass.
 
-### Task 4: Irodori capabilities and framed streaming client
+## Task 4: Irodori capabilities and framed streaming client
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/IrodoriWire.swift`
@@ -239,7 +239,7 @@ Run: `swift test --filter 'IrodoriWireTests|IrodoriClientTests'`
 
 Expected: all wire and client tests pass.
 
-### Task 5: Telemetry-first pipeline and bounded queues
+## Task 5: Telemetry-first pipeline and bounded queues
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/Pipeline.swift`
@@ -277,7 +277,7 @@ Run: `swift test --filter PipelineTests`
 
 Expected: all deterministic pipeline tests pass with no sleeps or wall-clock dependence.
 
-### Task 6: Apple Speech live and replay adapters
+## Task 6: Apple Speech live and replay adapters
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerMacOS/AppleSpeechSession.swift`
@@ -311,7 +311,7 @@ Run: `swift build -Xswiftc -warnings-as-errors && swift test --filter AppleSpeec
 
 Expected: strict build and mapping tests pass without requesting microphone permission.
 
-### Task 7: CoreAudio device routing and WAV playback
+## Task 7: CoreAudio device routing and WAV playback
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerMacOS/CoreAudioDevices.swift`
@@ -344,7 +344,7 @@ Run: `swift test --filter 'WAVTests|CoreAudioDeviceTests' && swift build -Xswift
 
 Expected: tests and strict build pass without producing sound.
 
-### Task 8: CLI composition, app bundle, doctor, replay, and report
+## Task 8: CLI composition, app bundle, doctor, replay, and report
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCLI/main.swift`
@@ -386,7 +386,7 @@ dist/IrodoriVoiceChanger.app/Contents/MacOS/irodori-voicechanger help
 
 Expected: tests pass, signature verifies, and help lists only the documented commands.
 
-### Task 9: Documentation, CI, and full local gate
+## Task 9: Documentation, CI, and full local gate
 
 **Files:**
 - Create: `README.md`
@@ -421,7 +421,7 @@ git status --short
 
 Expected: all deterministic gates pass; status lists only intentional uncommitted project files.
 
-### Task 10: Safe live verification and latency baseline
+## Task 10: Safe live verification and latency baseline
 
 **Files:**
 - Create: `docs/validation/2026-08-12-initial-baseline.md`

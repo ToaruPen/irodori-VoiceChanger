@@ -113,19 +113,29 @@ extension CLIApplication {
                     await recordSpeechOnly(
                         event, sessionID: sessionID, recorder: recorder, clock: clock)
                 }
-                await shadow?.stop()
-                await endpointShadow?.stop()
-                if let failure = await endpoint.finalizationHandler?.failureRequiringStop() {
-                    throw PipelineOperationError(failure)
-                }
-                if let failure = await endpoint.semanticHandler?.failureRequiringStop() {
-                    throw PipelineOperationError(failure)
-                }
             } catch {
                 await shadow?.cancel()
                 await endpointShadow?.cancel()
                 throw StagedRuntimeError(stage: .speech, code: .speechUnavailable)
             }
+            await shadow?.stop()
+            await endpointShadow?.stop()
+            try await checkReplayEndpointFailures(
+                finalizationHandler: endpoint.finalizationHandler,
+                semanticHandler: endpoint.semanticHandler
+            )
+        }
+    }
+
+    static func checkReplayEndpointFailures(
+        finalizationHandler: EndpointFinalizationHandler?,
+        semanticHandler: SemanticEndpointHandler?
+    ) async throws {
+        if let failure = await finalizationHandler?.failureRequiringStop() {
+            throw PipelineOperationError(failure)
+        }
+        if let failure = await semanticHandler?.failureRequiringStop() {
+            throw PipelineOperationError(failure)
         }
     }
 

@@ -5,6 +5,7 @@ public actor DiscardingStablePrefixSynthesizer: StablePrefixCandidateHandling {
     private let synthesizer: any Synthesizing
     private let telemetry: any TelemetryRecording
     private let clock: any MonotonicClock
+    private let stopGracePeriod: Duration
     private var candidates = [UUID: String]()
     private var tasks = [UUID: Task<Void, Never>]()
     private var requestStartedAt = [UUID: UInt64]()
@@ -15,12 +16,14 @@ public actor DiscardingStablePrefixSynthesizer: StablePrefixCandidateHandling {
         sessionID: UUID,
         synthesizer: any Synthesizing,
         telemetry: any TelemetryRecording,
-        clock: any MonotonicClock
+        clock: any MonotonicClock,
+        stopGracePeriod: Duration = .seconds(1)
     ) {
         self.sessionID = sessionID
         self.synthesizer = synthesizer
         self.telemetry = telemetry
         self.clock = clock
+        self.stopGracePeriod = stopGracePeriod
     }
 
     public func submit(candidate: String, utteranceID: UUID) async {
@@ -72,11 +75,15 @@ public actor DiscardingStablePrefixSynthesizer: StablePrefixCandidateHandling {
     }
 
     public func stop() async {
-        let activeTasks = Array(tasks.values)
-        for task in activeTasks {
-            await task.value
+        let deadline = ContinuousClock.now.advanced(by: stopGracePeriod)
+        while !tasks.isEmpty, ContinuousClock.now < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(10))
         }
+        tasks.values.forEach { $0.cancel() }
         tasks.removeAll()
+        candidates.removeAll()
+        requestStartedAt.removeAll()
+        serverMetrics.removeAll()
         await flushPendingFinalComparisons()
     }
 

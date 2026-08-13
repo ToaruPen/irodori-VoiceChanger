@@ -2,7 +2,7 @@
 
 ## 結論
 
-Pipecat Smart Turn v3.2はApple Speechを置き換えるASRではなく、Appleの確定処理を早めてよいかを判定する小さな音声モデルとしてnative Swiftへ組み込めた。固定WAVではPython参照実装と15/15件でcomplete/incomplete判定が一致し、意味未完の3例をすべてholdした。推論p50は84.38ms、Appleの早期finalize自体はp50 18.42msである。機械的には、約2秒あるAppleの確定待ちを大きく削れる。
+Pipecat Smart Turn v3.2はApple Speechを置き換えるASRではなく、Appleの確定処理を早めてよいかを判定する小さな音声モデルとしてnative Swiftへ組み込めた。固定WAVではPython参照実装と15/15件でcomplete/incomplete判定が一致し、意味未完の3例をすべてholdした。推論p50は84.38msだった。一時的なactive replayではAppleの早期finalize自体がp50 18.42msであり、機械的には約2秒あるAppleの確定待ちを大きく削れることも確認した。
 
 ところが、同じ既定閾値0.5と700ms無音を実マイクへ持ち込むと結果が反転した。発話が再開した6候補のうち、正しくincompleteと判定できたのは1候補だけで、残る5候補をcompleteと判定した。さらに、発話再開なしで残った1候補はApple finalとの一致率・coverageがともに0だった。推論は速いが、確定対象の品質が足りない。
 
@@ -16,7 +16,7 @@ replayとliveの`--shadow-smart-turn`は判定時刻と結果を記録するだ�
 
 telemetryにはrequested/completed/failed、推論時間、4段階の確率bucket、completeの真偽だけを保存する。音声、feature、発話本文、partial、final、hash、文字数、WAV path、voice、device、URLは保存しない。
 
-## Gate 1: 同一WAV replay
+## Gate 1: 同一WAV replay — 現行shadow-only
 
 真の末尾1件、意味が完結したpause 6件、意味未完のpause 3件を、既定閾値0.5・700ms無音でreplayした。すべて同じWAVをPython参照実装とnative実装へ渡し、合成と再生は無効にした。
 
@@ -25,17 +25,26 @@ telemetryにはrequested/completed/failed、推論時間、4段階の確率bucke
 | semantic判定 | 15件 |
 | Pythonとのcomplete/incomplete一致 | 15 / 15 |
 | 意味未完pauseのhold | 3 / 3 |
-| 意味未完pauseでのfinalize要求 | 0 / 3 |
 | complete判定 | 12件 |
-| finalize完了 / 要求 | 12 / 12 |
-| semantic / finalize失敗 | 0 / 0 |
+| semantic失敗 | 0 |
 | semantic推論 p50 / p95 | 84.38 / 86.91ms |
+| input drop / endpoint overflow | 0 / 0 |
+
+現行の`--shadow-smart-turn`は判定だけを記録し、Apple finalizeを要求しない。固定入力におけるnative classifierの再現性と意味未完pauseのholdについて、Gate 1は通過した。
+
+### 一時的なactive replay計測（削除済み）
+
+次の数値は、semantic completeをApple finalizeへ一時的に接続して測定した結果である。現在の実装にこの接続はなく、同じactive経路を再現するCLI flagも提供しない。
+
+| 観測 | 結果 |
+|---|---:|
+| finalize完了 / 要求 | 12 / 12 |
+| finalize失敗 | 0 |
 | Apple finalize p50 / p95 | 18.42 / 27.24ms |
 | 候補とfinalの一致率 | 12 / 12で1.0 |
 | final coverage | 最小0.7、p50 0.9 |
-| input drop / endpoint overflow | 0 / 0 |
 
-単純な真末尾WAVでは、通常controlの音声range終端→finalが約2985.9msだったのに対し、semantic gate後は740.94msだった。この1件では候補→finalが105.12ms、候補とfinalの一致率・coverageはともに1.0である。固定入力に限ればGate 1は通過した。
+単純な真末尾WAVでは、通常controlの音声range終端→finalが約2985.9msだったのに対し、一時的なsemantic gate後は740.94msだった。この1件では候補→finalが105.12ms、候補とfinalの一致率・coverageはともに1.0である。この計測は短縮余地の証拠であり、現行機能の説明ではない。
 
 ## Gate 2: 実マイクlive shadow
 
@@ -95,10 +104,11 @@ Gate 2は意図的に約1.5秒の意味未完pauseを置くstress testであり�
 
 ## 検証
 
-- native classifier: Python参照判定15/15一致
+- 現行shadow-only classifier: Python参照判定15/15一致、Apple finalize要求0件
 - 実マイク: 4 utterances、7 semantic decisions、4 Irodori playbacks
-- live finalize: 700msで11 utterances / 11 playbacks、500msで9 / 9
-- semantic/finalize failure、input drop、endpoint overflow: 0件
+- 現行shadow-onlyのsemantic failure、input drop、endpoint overflow: 0件
+- 削除済みの一時live finalize計測: 700msで11 utterances / 11 playbacks、500msで9 / 9
+- 削除済み経路のsemantic/finalize failure、input drop: 0件
 - `just check`: format、SwiftLint、warnings-as-errors build、全test、coverage、secret scan、justfile、release app build/signingを実行
 - 発話本文・音声の保存、transcript表示: 0件
 - partialのIrodori送信、投機再生: 0件

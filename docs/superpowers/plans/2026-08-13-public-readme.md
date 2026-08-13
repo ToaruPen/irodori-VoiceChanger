@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Rewrite the public README
+## Task 1: Rewrite the public README
 
 **Files:**
 - Modify: `README.md`
@@ -67,7 +67,7 @@ Follow the table with the validated conclusion that fixed-WAV promise does not e
 
 List the telemetry fields at category level and explicitly exclude transcripts, input/generated audio, voice IDs, device IDs, endpoints, credentials, and response bodies. State that the server currently returns audio only after full synthesis, hot-unplug recovery is not implemented, and 12-step quality is retained. Link the three experiment validation reports and the baseline report rather than duplicating their full measurements.
 
-### Task 2: Verify the README against the repository
+## Task 2: Verify the README against the repository
 
 **Files:**
 - Verify: `README.md`

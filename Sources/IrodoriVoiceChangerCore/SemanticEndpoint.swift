@@ -92,11 +92,12 @@ public actor SemanticEndpointHandler: EndpointCandidateHandling {
                 samples: snapshot,
                 sampleRate: snapshotSampleRate
             )
+            let completed = clock.nowNanoseconds()
             await record(
                 .semanticEndpointCompleted,
                 utteranceID: utteranceID,
-                timestamp: clock.nowNanoseconds(),
-                durationMilliseconds: prediction.durationMilliseconds,
+                timestamp: completed,
+                durationMilliseconds: elapsedMilliseconds(from: started, to: completed),
                 probabilityBucket: probabilityBucket(prediction.probability),
                 complete: prediction.isComplete
             )

@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Pure endpoint evaluator
+## Task 1: Pure endpoint evaluator
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/EndpointShadow.swift`
@@ -21,7 +21,7 @@
 - [x] Implement the smallest actor that stores one in-memory candidate per utterance and emits deterministic outcomes.
 - [x] Run the focused suite and keep it green while extracting shared bucketed prefix comparison from the existing stable-prefix evaluator.
 
-### Task 2: Privacy-safe telemetry and reporting
+## Task 2: Privacy-safe telemetry and reporting
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/Telemetry.swift`
@@ -35,7 +35,7 @@
 - [x] Add only the required event names, metrics, counts, and report summaries.
 - [x] Run the focused suites and confirm no transcript-derived values beyond bucketed ratios are serialized.
 
-### Task 3: PCM activity adapter
+## Task 3: PCM activity adapter
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerMacOS/AudioActivity.swift`
@@ -49,7 +49,7 @@
 - [x] Implement fixed −45 dBFS classification and optional activity callbacks after format conversion.
 - [x] Run the focused suites and verify flag-off replay behavior remains unchanged.
 
-### Task 4: CLI composition
+## Task 4: CLI composition
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCLI/CLI.swift`
@@ -63,7 +63,7 @@
 - [x] Add one optional integer value and wire one monitor to the audio and speech streams without changing final synthesis.
 - [x] Run focused CLI and pipeline tests.
 
-### Task 5: Controlled measurement
+## Task 5: Controlled measurement
 
 **Files:**
 - Modify: `README.md`
@@ -76,7 +76,7 @@
 - [x] Document observations, limitations, and the next safe boundary; do not enable endpoint commitment or candidate playback.
 - [x] Run `just check` and `git diff --check` after documentation.
 
-### Task 6: Review hardening
+## Task 6: Review hardening
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/EndpointShadow.swift`

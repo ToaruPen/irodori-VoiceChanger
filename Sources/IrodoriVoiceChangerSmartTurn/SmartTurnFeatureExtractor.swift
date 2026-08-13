@@ -103,18 +103,31 @@ public enum SmartTurnFeatureExtractor {
         var mean: Float = 0
         vDSP_meanv(waveform, 1, &mean, vDSP_Length(waveform.count))
         var negativeMean = -mean
-        vDSP_vsadd(
-            waveform,
-            1,
-            &negativeMean,
-            &waveform,
-            1,
-            vDSP_Length(waveform.count)
-        )
+        waveform.withUnsafeMutableBufferPointer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            vDSP_vsadd(
+                baseAddress,
+                1,
+                &negativeMean,
+                baseAddress,
+                1,
+                vDSP_Length(buffer.count)
+            )
+        }
         var variance: Float = 0
         vDSP_measqv(waveform, 1, &variance, vDSP_Length(waveform.count))
         var scale = 1 / sqrt(variance + varianceEpsilon)
-        vDSP_vsmul(waveform, 1, &scale, &waveform, 1, vDSP_Length(waveform.count))
+        waveform.withUnsafeMutableBufferPointer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            vDSP_vsmul(
+                baseAddress,
+                1,
+                &scale,
+                baseAddress,
+                1,
+                vDSP_Length(buffer.count)
+            )
+        }
     }
 
     private static func logMelFeatures(_ waveform: [Float]) throws -> [Float] {

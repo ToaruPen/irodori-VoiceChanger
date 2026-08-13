@@ -59,6 +59,25 @@ struct StablePrefixShadowSynthesisTests {
     }
 
     @Test
+    func stopCancelsCandidateAfterGracePeriod() async {
+        let synthesizer = CandidateBlockingSynthesizer()
+        let subject = DiscardingStablePrefixSynthesizer(
+            sessionID: UUID(),
+            synthesizer: synthesizer,
+            telemetry: CandidateMemoryRecorder(),
+            clock: SystemMonotonicClock(),
+            stopGracePeriod: .zero
+        )
+
+        await subject.submit(candidate: "こん", utteranceID: UUID())
+        await synthesizer.waitUntilStarted()
+        await subject.stop()
+        await synthesizer.waitUntilCancelled()
+
+        #expect(await synthesizer.wasCancelled)
+    }
+
+    @Test
     func finalDoesNotWaitForComparisonTelemetry() async {
         let recorder = CandidateBlockingComparisonRecorder()
         let synthesizer = CandidateBlockingSynthesizer()
@@ -218,6 +237,7 @@ private actor CandidateBlockingSynthesizer: Synthesizing {
     private(set) var wasCancelled = false
     private var started = false
     private var startedWaiters = [CheckedContinuation<Void, Never>]()
+    private var cancellationWaiters = [CheckedContinuation<Void, Never>]()
 
     func synthesize(
         text _: String,
@@ -233,6 +253,9 @@ private actor CandidateBlockingSynthesizer: Synthesizing {
             return AudioClip(wavBytes: Data(), durationMilliseconds: 0)
         } catch is CancellationError {
             wasCancelled = true
+            let waiters = cancellationWaiters
+            cancellationWaiters.removeAll()
+            waiters.forEach { $0.resume() }
             throw CancellationError()
         }
     }
@@ -240,6 +263,11 @@ private actor CandidateBlockingSynthesizer: Synthesizing {
     func waitUntilStarted() async {
         guard !started else { return }
         await withCheckedContinuation { startedWaiters.append($0) }
+    }
+
+    func waitUntilCancelled() async {
+        guard !wasCancelled else { return }
+        await withCheckedContinuation { cancellationWaiters.append($0) }
     }
 }
 

@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Replay-only CLI contract
+## Task 1: Replay-only CLI contract
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCLI/CLI.swift`
@@ -55,7 +55,7 @@ Run: `swift test --filter CLITests`
 
 Expected: all CLI tests pass.
 
-### Task 2: Endpoint candidate handler
+## Task 2: Endpoint candidate handler
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/EndpointShadow.swift`
@@ -93,7 +93,7 @@ Run: `swift test --filter EndpointShadowTests`
 
 Expected: all endpoint shadow tests pass.
 
-### Task 3: Measured finalization handler and report evidence
+## Task 3: Measured finalization handler and report evidence
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/EndpointFinalization.swift`
@@ -141,7 +141,7 @@ Run: `swift test --filter EndpointFinalizationTests && swift test --filter Repor
 
 Expected: both suites pass.
 
-### Task 4: Apple adapter and replay composition
+## Task 4: Apple adapter and replay composition
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerMacOS/AppleSpeechSession.swift`
@@ -174,7 +174,7 @@ Run: `swift test --filter CLITests && swift test`
 
 Expected: all tests pass without Apple assets, microphone, network, or audible output.
 
-### Task 5: Documentation and fixed-WAV experiment
+## Task 5: Documentation and fixed-WAV experiment
 
 **Files:**
 - Modify: `README.md`
@@ -203,7 +203,7 @@ Record aggregate counts and timings only. Stop without Pipecat integration if fi
 return, candidate/final match regresses, or the lead is not material. Even on success, keep active
 use disabled and recommend only the next semantic-boundary shadow experiment.
 
-### Task 6: Scope and privacy audit
+## Task 6: Scope and privacy audit
 
 **Files:**
 - Verify only; no new source files.

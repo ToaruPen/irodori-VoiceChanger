@@ -13,7 +13,7 @@
 Repository policy requires explicit authorization for commits. The user authorized autonomous
 implementation but did not request commits, so commit steps are intentionally omitted.
 
-### Task 1: Candidate contract and first-candidate selection
+## Task 1: Candidate contract and first-candidate selection
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/StablePrefixShadow.swift`
@@ -59,7 +59,7 @@ Run: `swift test --filter StablePrefixShadowTests`
 
 Expected: all stable-prefix evaluator and monitor tests pass.
 
-### Task 2: Discard-only synthesis actor
+## Task 2: Discard-only synthesis actor
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/StablePrefixShadowSynthesis.swift`
@@ -115,7 +115,7 @@ Run: `swift test --filter StablePrefixShadowSynthesisTests`
 
 Expected: all one-request, cancellation, isolation, comparison, and privacy tests pass.
 
-### Task 3: Dedicated report metrics
+## Task 3: Dedicated report metrics
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/Telemetry.swift`
@@ -150,7 +150,7 @@ Run: `swift test --filter 'TelemetryTests|ReportTests'`
 
 Expected: all telemetry encoding and report aggregation tests pass.
 
-### Task 4: Opt-in CLI and pipeline lifecycle wiring
+## Task 4: Opt-in CLI and pipeline lifecycle wiring
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/Pipeline.swift`
@@ -195,7 +195,7 @@ Run: `swift test --filter 'CLITests|StablePrefixPipelineTests|StablePrefixShadow
 Expected: all focused tests pass, with one candidate request, one final request, and only final
 playback.
 
-### Task 5: Documentation, gates, and measurements
+## Task 5: Documentation, gates, and measurements
 
 **Files:**
 - Modify: `README.md`

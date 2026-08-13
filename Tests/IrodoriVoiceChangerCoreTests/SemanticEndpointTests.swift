@@ -37,16 +37,19 @@ struct SemanticEndpointTests {
         let classifier = SemanticClassifierSpy(
             prediction: try SemanticTurnPrediction(probability: 0.9, durationMilliseconds: 8)
         )
+        let recorder = SemanticMemoryRecorder()
         let handler = SemanticEndpointHandler(
             sessionID: UUID(),
             classifier: classifier,
-            telemetry: SemanticMemoryRecorder(),
-            clock: SemanticSequenceClock(values: [10, 20])
+            telemetry: recorder,
+            clock: SemanticSequenceClock(values: [10, 3_000_010])
         )
 
         let disposition = await handler.handleEndpointCandidate(utteranceID: UUID())
 
         #expect(disposition == .retryAfterSpeech)
+        let completed = await recorder.events.last { $0.name == .semanticEndpointCompleted }
+        #expect(completed?.metrics.durationMilliseconds == 3)
     }
 
     @Test

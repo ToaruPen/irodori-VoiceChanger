@@ -54,6 +54,24 @@ struct CLITests {
     }
 
     @Test
+    func replayEndpointFailurePreservesPipelineError() async {
+        let handler = EndpointFinalizationHandler(
+            sessionID: UUID(),
+            telemetry: NoopTelemetryRecorder(),
+            clock: SystemMonotonicClock(),
+            operation: { throw CLIEndpointTestError.failed }
+        )
+        _ = await handler.handleEndpointCandidate(utteranceID: UUID())
+
+        await #expect(throws: PipelineOperationError(.speechUnavailable)) {
+            try await CLIApplication.checkReplayEndpointFailures(
+                finalizationHandler: handler,
+                semanticHandler: nil
+            )
+        }
+    }
+
+    @Test
     func liveSmartTurnShadowKeepsCompleteDecisionNonTerminal() async throws {
         let handler = try #require(
             CLIApplication.makeLiveSemanticHandler(
@@ -379,6 +397,10 @@ struct CLITests {
         let report = TelemetryReportBuilder.build(events: events, sessionID: sessionID)
         #expect(report.metrics[.requestToFirstAudio]?.p50 == 0.000_04)
     }
+}
+
+private enum CLIEndpointTestError: Error {
+    case failed
 }
 
 private actor NoopTelemetryRecorder: TelemetryRecording {

@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Package and model boundary
+## Task 1: Package and model boundary
 
 **Files:**
 - Modify: `Package.swift`
@@ -27,7 +27,7 @@
 - [ ] Implement only the validated prediction value and stable Smart Turn error enum needed by the test.
 - [ ] Run the narrow test and confirm GREEN.
 
-### Task 2: Pipecat-compatible feature extraction
+## Task 2: Pipecat-compatible feature extraction
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerSmartTurn/SmartTurnFeatureExtractor.swift`
@@ -40,7 +40,7 @@
 - [ ] Add one-shot AVAudioConverter resampling for non-16-kHz mono input, retaining the last eight seconds before feature extraction.
 - [ ] Run the feature tests and confirm GREEN; refactor only after parity passes.
 
-### Task 3: Native ONNX inference parity
+## Task 3: Native ONNX inference parity
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerSmartTurn/SmartTurnClassifier.swift`
@@ -52,7 +52,7 @@
 - [ ] Implement one actor-isolated ORT environment/session with sequential execution, one intra-op thread, all graph optimizations, `input_features` shape `[1, 80, 800]`, and scalar `logits` output validation.
 - [ ] Run the classifier tests and confirm native/Python decision parity. Stop if any decision differs; do not tune the threshold.
 
-### Task 4: Retryable semantic endpoint handler
+## Task 4: Retryable semantic endpoint handler
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/EndpointShadow.swift`
@@ -68,7 +68,7 @@
 - [ ] Rearm `EndpointShadowEvaluator` only after a retryable candidate is followed by speech. Do not retry in the same silence.
 - [ ] Run the narrow suites and confirm GREEN.
 
-### Task 5: Privacy-safe semantic telemetry and report
+## Task 5: Privacy-safe semantic telemetry and report
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/Telemetry.swift`
@@ -84,7 +84,7 @@
 - [ ] Extend the existing content-absence tests to prohibit audio, transcript, text, feature, path, hash, voice, device and endpoint fields.
 - [ ] Run both suites and confirm GREEN.
 
-### Task 6: PCM observation and CLI composition
+## Task 6: PCM observation and CLI composition
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerMacOS/AudioActivity.swift`
@@ -103,7 +103,7 @@
 - [ ] Load the model before microphone or replay input consumption; fail closed if the resource/runtime is unavailable.
 - [ ] Run the audio and CLI suites, then `swift test`, and confirm GREEN.
 
-### Task 7: Fixed-WAV Gate 1 validation
+## Task 7: Fixed-WAV Gate 1 validation
 
 **Files:**
 - Modify: `README.md`
@@ -116,7 +116,7 @@
 - [ ] Aggregate semantic inference, decision counts, later speech resumption, failures, input drops and incomplete evidence.
 - [ ] Record privacy-safe results and the Gate 1 pass/fail decision. Continue only on pass.
 
-### Task 8: Live Gate 2 validation
+## Task 8: Live Gate 2 validation
 
 **Files:**
 - Modify: `docs/validation/2026-08-13-smart-turn-native-replay.md`
@@ -127,7 +127,7 @@
 - [ ] Record complete/incomplete decisions, resumption, inference p50/p95, input drops, failures and end-to-end lead.
 - [ ] If Gate 2 fails, keep live semantic finalize unavailable and report the blocking evidence.
 
-### Task 9: Reject the active connection after Gate 2
+## Task 9: Reject the active connection after Gate 2
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCLI/CLI.swift`
@@ -141,7 +141,7 @@
 - [ ] Keep `--shadow-smart-turn` non-mutating and preserve the default final-only path.
 - [ ] Run narrow tests and full `just check`.
 
-### Task 10: Final audit
+## Task 10: Final audit
 
 **Files:**
 - Verify only.

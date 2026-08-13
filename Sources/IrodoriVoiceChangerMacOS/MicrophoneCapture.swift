@@ -57,16 +57,12 @@ public final class MicrophoneCapture {
             for await item in rawStream {
                 guard !Task.isCancelled else { break }
                 let buffer = item.value
-                let analysisBuffer: AVAudioPCMBuffer?
-                if naturalFormat == analysisFormat {
-                    analysisBuffer = buffer
-                } else if let converter,
-                    let converted = buffer.converted(using: converter, to: analysisFormat)
-                {
-                    analysisBuffer = converted
-                } else {
-                    analysisBuffer = nil
-                }
+                let analysisBuffer = makeAnalysisBuffer(
+                    buffer,
+                    analysisFormat: analysisFormat,
+                    converter: converter,
+                    onDrop: { dropCounter.increment() }
+                )
                 if let analysisBuffer {
                     if let activityObserver,
                         let sample = AudioActivity.sample(from: analysisBuffer)
@@ -130,6 +126,22 @@ func makeMicrophoneTapHandler(
     _ body: @escaping @Sendable (AVAudioPCMBuffer) -> Void
 ) -> AVAudioNodeTapBlock {
     { buffer, _ in body(buffer) }
+}
+
+func makeAnalysisBuffer(
+    _ buffer: AVAudioPCMBuffer,
+    analysisFormat: AVAudioFormat,
+    converter: AVAudioConverter?,
+    onDrop: @Sendable () -> Void
+) -> AVAudioPCMBuffer? {
+    guard buffer.format != analysisFormat else { return buffer }
+    guard let converter,
+        let converted = buffer.converted(using: converter, to: analysisFormat)
+    else {
+        onDrop()
+        return nil
+    }
+    return converted
 }
 
 private final class InputDropCounter: @unchecked Sendable {

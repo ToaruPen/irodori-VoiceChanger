@@ -12,7 +12,7 @@
 
 No commits are created because the repository contract requires explicit user authorization.
 
-### Task 1: Deterministic stable-prefix evaluator and configuration gate
+## Task 1: Deterministic stable-prefix evaluator and configuration gate
 
 **Files:**
 - Create: `Sources/IrodoriVoiceChangerCore/StablePrefixShadow.swift`
@@ -57,7 +57,7 @@ decode unchanged in stable-prefix shadow mode.
 Run: `swift test --filter ConfigurationTests`
 Expected: all configuration tests pass, including strict threshold bounds.
 
-### Task 2: Privacy-safe telemetry, report, and pipeline/replay wiring
+## Task 2: Privacy-safe telemetry, report, and pipeline/replay wiring
 
 **Files:**
 - Modify: `Sources/IrodoriVoiceChangerCore/StablePrefixShadow.swift`
@@ -117,7 +117,7 @@ monitor before `recordSpeechOnly`; in synthesized replay and live mode pass it t
 Run after wiring: `swift test --filter 'PipelineTests|CLITests'`
 Expected: all selected tests pass; partials emit shadow telemetry but never synthesize.
 
-### Task 3: Replay evidence and the next single-variable decision
+## Task 3: Replay evidence and the next single-variable decision
 
 **Files:**
 - Modify: `README.md`
