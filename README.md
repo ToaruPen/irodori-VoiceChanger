@@ -1,47 +1,97 @@
 # Irodori VoiceChanger
 
-Irodoriの音質を保ったまま会話へ持ち込めるか。難しいのは音声合成そのものより、発話の終端をいつ確定し、完成した音声をどこまで早く再生へ渡せるかです。このPoCは、その待ち時間を推測ではなく発話ごとの計測値として分解します。
+Irodori VoiceChanger is an experimental macOS application for turning Japanese microphone speech
+into an Irodori-generated voice and routing the result to a selected CoreAudio output. It is also a
+measurement harness for finding where conversational latency is actually spent: speech endpointing,
+Apple Speech finalization, Irodori synthesis, transport, queueing, or playback.
 
-現在の経路は次のとおりです。
+> [!IMPORTANT]
+> This repository is a proof of concept, not a production voice changer. The normal path sends only
+> finalized Apple Speech results to Irodori. Experimental endpoint and partial-transcript features
+> remain opt-in shadow measurements and do not alter audible output unless explicitly documented.
+
+## Status
+
+The final-only microphone-to-Irodori path works on macOS 26 and can route generated audio to a
+loopback device such as BlackHole. Fixed-WAV replay, content-free telemetry, latency reports, and
+several endpoint experiments are included.
+
+The experiments found substantial room to reduce Apple Speech's endpoint wait, but did not establish
+a semantic cutoff that was reliable enough for active use. Smart Turn therefore remains shadow-only,
+and speculative partial synthesis is measured and discarded rather than played.
+
+## How it works
 
 ```text
-microphone → Apple Speech → finalized text → Irodori → PCM16 WAV → selected CoreAudio output
+microphone
+    -> on-device Apple Speech transcription
+    -> finalized Japanese text
+    -> Irodori synthesis server
+    -> PCM16 WAV
+    -> selected CoreAudio output
 ```
 
-RVC、Whisper、OpenAI API、mocoは使用しません。音声認識はmacOS 26のApple Speechをオンデバイスで使い、合成だけを既存のIrodoriサーバーへ送ります。
+Apple Speech owns transcription, Irodori owns voice generation, and CoreAudio owns output routing.
+The application does not use RVC or a cloud transcription API. The bundled Pipecat Smart Turn model
+is an optional endpoint classifier, not an ASR replacement.
 
-## 現在わかること
+Irodori's current `/synthesize_stream` response is transport-streamed after the model has produced a
+complete clip. It does not expose native incremental PCM generation, so request-to-first-audio time
+still includes most of the synthesis work.
 
-Apple Speechはpartialとfinalを逐次返しますが、基準経路がIrodoriへ渡すのはfinalだけです。partialは後から書き換わるため、先に合成すると発音済みの音声を取り消せません。まず正しい基準値を取り、その後に安定したprefixだけを先行確定する実験へ進めます。
+## Features
 
-Irodoriの`/synthesize_stream`は転送を分割します。しかし、現行Irodoriモデルが生成途中のPCMを逐次返すわけではありません。したがって`request_to_first_audio_ms`には、ネットワークだけでなくIrodoriが発話を完成させる時間も含まれます。この区別が、最初の最適化対象を決めます。
+- On-device Japanese transcription with Apple Speech
+- Final-only synthesis as the safe default
+- Explicit CoreAudio output selection by device UID
+- Reproducible PCM16 WAV replay for one-variable-at-a-time comparisons
+- Content-free JSONL telemetry with per-stage latency reports
+- Bounded synthesis and playback queues with cancellation and failure reporting
+- Stable-prefix, silence-endpoint, Apple-finalization, and Smart Turn shadow experiments
+- A native Swift Smart Turn v3.2 runtime using the bundled INT8 ONNX model
 
-## 必要な環境
+The project does not restart or redeploy Irodori, modify its voice bank, persist microphone audio, or
+automatically fall back to the Mac's speakers when a configured output is unavailable.
+
+## Requirements
 
 - macOS 26
-- Xcode 26とSwift 6.3
-- Node.js 24、`just`、SwiftLint
-- 到達可能な`irodori-tts-infra`サーバー
-- Discordへ渡す場合はBlackHoleなどのCoreAudioループバック出力
+- Xcode 26 with Swift 6.3
+- Node.js 24, `just`, and SwiftLint
+- An Apple Silicon Mac with the Japanese Apple Speech assets available
+- A reachable `irodori-tts-infra` synthesis server
+- A CoreAudio loopback device, such as BlackHole, when routing the transformed voice into another app
 
-Apple Speechの日本語資産が未導入なら、初回の`run`または`replay`でOS管理の資産を取得します。live入力に必要なマイク権限は、固定bundle IDを持つ`.app`から要求します。新しいSpeechTranscriberに旧SFSpeechRecognizerの音声認識権限は要求しません。TCCデータベースを直接変更する手順もありません。
+The first `run` or `replay` may ask macOS to install the required Japanese Speech assets. Live use
+requests microphone permission from the built `.app`; it does not modify the TCC database directly.
 
-## セットアップ
+## Quick start
 
 ```bash
-cd ~/Dev/irodori-VoiceChanger
+git clone https://github.com/ToaruPen/irodori-VoiceChanger.git
+cd irodori-VoiceChanger
 just bootstrap
 just build-app
-dist/IrodoriVoiceChanger.app/Contents/MacOS/irodori-voicechanger config init
-dist/IrodoriVoiceChanger.app/Contents/MacOS/irodori-voicechanger devices
+just config init
+just devices
 ```
 
-`~/Library/Application Support/IrodoriVoiceChanger/config.json`を開き、少なくとも次の2項目を実環境に合わせます。
+Edit the generated configuration at:
 
-- `irodori.base_url`: SSHポートフォワードなら`http://127.0.0.1:PORT`、リモート直結ならHTTPSのみ
-- `audio.output_device_uid`: `devices`が表示した出力UID。名前ではなくUIDを指定
+```text
+~/Library/Application Support/IrodoriVoiceChanger/config.json
+```
 
-設定は未知のキーや資格情報入りURLを拒否します。出力UIDが見つからない場合も、Macのスピーカーへフォールバックしません。
+At minimum, set:
+
+- `irodori.base_url`: use `http://127.0.0.1:PORT` for a local SSH tunnel, or HTTPS for a remote host.
+  Plain HTTP is rejected for non-loopback hosts, and URLs containing credentials are rejected.
+- `audio.output_device_uid`: use the exact UID printed by `just devices`, not the display name.
+
+The versioned example uses the validated quality profile: 12 sampling steps, the `sway` schedule,
+the `neutral` style, and a sway coefficient of `-1.0`.
+
+Validate the configuration and runtime before starting live capture:
 
 ```bash
 just config validate
@@ -49,25 +99,36 @@ just doctor
 just doctor --synthesize
 ```
 
-通常の`doctor`は読み取り中心です。`--synthesize`を付けた場合だけ固定の非機密文を1回合成し、WAVまで検証します。サーバーの再起動、再配備、voice bankの変更は行いません。
+`doctor` is read-mostly. The `--synthesize` option sends one fixed, non-sensitive sentence and
+validates the returned WAV. Neither command restarts, redeploys, or reconfigures the server.
 
-## 実行
+## Live use
 
 ```bash
 just run
 ```
 
-起動準備が終わると`ready`が表示されます。停止はControl-Cです。認識内容は既定では画面にもログにも出ません。調整中にだけ確認する場合は`just run --show-transcript`を使います。
+The process prints `ready` after microphone, Speech, server, and output initialization completes.
+Stop it with Control-C. Shutdown stops capture, finishes Apple Speech, and cancels in-flight Irodori
+work.
 
-Control-CはマイクとApple Speechを停止し、進行中のIrodori requestをcancelします。BlackHoleを実行中に
-削除・再構成した場合は、プロセスを止めて`just doctor`を再実行してください。このPoCはCoreAudio
-deviceのhot-unplugを自動復旧しません。
+Transcripts are hidden by default. Display them only for supervised debugging:
 
-Discordでは、設定したループバックデバイスを入力デバイスとして選びます。モニタリングはヘッドホンへ分けてください。同じループバックをシステム全体の既定出力にすると、Discordの相手の声まで再入力される可能性があります。
+```bash
+just run --show-transcript
+```
 
-## 再現可能な検証
+To use the transformed voice in Discord, OBS, or another application, configure a loopback device as
+`audio.output_device_uid`, then select that device as the application's microphone input. Monitor on
+headphones through a separate output. Using the same loopback device as the system-wide output can
+feed remote audio back into the call and create a doubled or echoing voice.
 
-同じPCM16 WAVを使えば、マイクの話し方を変えずに認識・合成条件を比較できます。
+If the configured device is removed or reconfigured while the process is running, stop the process,
+run `just doctor`, and start it again. Hot-unplug recovery is not implemented.
+
+## Reproducible WAV replay
+
+Use the same PCM16 WAV across conditions to compare behavior without changing microphone delivery:
 
 ```bash
 just replay path/to/input.wav
@@ -77,36 +138,88 @@ just report latest
 just report latest --json
 ```
 
-`--synthesize`だけなら音声は捨て、ASRとIrodoriの時間を計測します。`--live-output`を加えたときだけ、設定済みCoreAudio出力へ再生します。
+`--synthesize` measures Apple Speech and Irodori but discards generated audio. Add `--live-output`
+only when you intentionally want playback through the configured CoreAudio device.
 
-## テレメトリ
+## Experimental shadow modes
 
-記録はローカルJSONLです。既定では`~/Library/Application Support/IrodoriVoiceChanger/telemetry`へmode `0600`で保存し、5 MiBごとに3世代までローテーションします。テレメトリ障害は音声経路を停止させませんが、`telemetry_unavailable`として扱える境界を保っています。
+These modes are opt-in measurement tools. They are not production endpoint policies.
 
-各イベントが持つのは次の情報だけです。
+| Mode | Command or setting | Purpose | Audible or remote effect |
+| --- | --- | --- | --- |
+| Stable-prefix measurement | Set `speech.commit_policy.mode` to `stable_prefix` | Measure when an unchanged partial prefix appears and how it compares with the final transcript | None |
+| Prefix synthesis shadow | `--shadow-synthesize-prefix` | Measure the latency and cost of synthesizing the first stable candidate | Sends one candidate to the configured Irodori server, then discards its audio; the normal final path remains separate |
+| Silence endpoint shadow | `--shadow-endpoint-ms 100...3000` | Compare a fixed trailing-silence boundary with the later Apple final | None |
+| Apple early-finalize replay | `--shadow-early-finalize-ms 100...3000` | Measure the mechanics of `SpeechAnalyzer.finalize(through:)` | Calls Apple finalize during speech-only replay; no Irodori request or playback |
+| Smart Turn shadow | `--shadow-smart-turn` | Classify a 700 ms silence candidate from the latest eight seconds of audio | None; never calls Apple finalize, Irodori, or playback |
 
-- schema version、session ID、utterance ID
-- 単調時計のnanosecond timestamp
-- stage、安定したevent/error code
-- duration、音声長、server elapsed、byte count、queue depth、partial revision count、sampling steps
+Examples:
 
-発話本文、音声、voice ID、端末名、出力名・UID、URL、資格情報、サーバーの応答本文は保存しません。
+```bash
+just replay path/to/input.wav --synthesize --shadow-synthesize-prefix
+just run --shadow-synthesize-prefix
+just replay path/to/input.wav --shadow-endpoint-ms 1200
+just run --shadow-endpoint-ms 1200
+just replay path/to/input.wav --shadow-early-finalize-ms 300
+just replay path/to/input.wav --shadow-smart-turn
+just run --shadow-smart-turn
+```
 
-`report`は発話ごとに次の区間を復元し、min/p50/p95/maxを出します。
+Smart Turn matched its Python reference on the saved fixed-WAV corpus, including three deliberately
+incomplete pauses. In the live stress test, however, it classified five of six candidates followed by
+resumed speech as complete. The repository therefore does not expose active Smart Turn finalization.
+The normal `run` command remains final-only.
 
-- 音声range終端 → first partial / Detector end / finalのdelivery（Apple Speechのaudio timeline基準）
-- 音声range終端 → BlackHole再生開始
-- ASR final → Irodori request
-- request → stream handshake / first audio / complete
-- server reported elapsed / request totalとの差
-- playback enqueue → playback start
-- speech end → playback start
+## Telemetry and privacy
 
-入力buffer drop、失敗、最大queue depth、underrun、clip間gap、RTF、partialの書き換え回数も別に数えます。固定の合格数値はまだ置きません。最も大きい区間を測り、1条件ずつ変えて同じWAVで比較します。
+Telemetry is stored locally as JSONL under:
 
-このMacでの初回実機検証では、BlackHole、IrodoriへのSSH転送、Discord入力まで設定済みです。測定値と現在残るボトルネックは[初期検証記録](docs/validation/2026-08-12-initial-baseline.md)を参照してください。
+```text
+~/Library/Application Support/IrodoriVoiceChanger/telemetry
+```
 
-## 開発
+Files use mode `0600`, rotate at 5 MiB, and retain three generations by default. Events contain only
+bounded operational data such as schema and correlation IDs, monotonic timestamps, stable event and
+error codes, durations, byte counts, queue depths, partial revision counts, probability buckets, and
+sampling steps.
+
+Telemetry does not store:
+
+- transcripts, partial text, final text, or text hashes
+- microphone audio, generated audio, model features, or WAV paths
+- voice IDs, device names or UIDs, server URLs, or credentials
+- server response bodies
+
+`report` reconstructs stage intervals and summarizes min/p50/p95/max values without revealing speech
+content. A telemetry write failure does not stop normal audio processing, but the resulting evidence is
+marked incomplete.
+
+## Known limitations
+
+- This is a macOS 26 proof of concept with no compatibility promise for older systems.
+- Apple Speech finalization remains the largest ASR-side wait in the safe default path.
+- The current Irodori endpoint returns audio after full-clip synthesis rather than native causal PCM.
+- Stable-prefix candidates observed so far covered too little of the final utterance to justify playback.
+- Fixed silence can split long pauses inside a sentence; longer thresholds give back much of the gain.
+- Smart Turn did not safely distinguish deliberate incomplete pauses in the live stress test.
+- The 8-step Irodori profile was faster but produced a noticeable quality regression in listening, so
+  the shipped example and active local configuration remain at 12 steps.
+- Generated clips can queue behind earlier playback when speech is divided into short utterances.
+- CoreAudio hot-unplug recovery and segment stitching are not implemented.
+
+## Validation evidence
+
+The repository keeps measurements separate from the public introduction:
+
+- [Initial microphone-to-Irodori baseline](docs/validation/2026-08-12-initial-baseline.md)
+- [Stable-prefix and discarded candidate synthesis](docs/validation/2026-08-12-stable-prefix-shadow.md)
+- [Apple Speech early-finalize replay](docs/validation/2026-08-13-early-finalize-shadow.md)
+- [Native Smart Turn replay and live shadow](docs/validation/2026-08-13-smart-turn-native-replay.md)
+
+Measurements use fixed WAV replay where possible, change one variable at a time, and avoid a fixed KPI
+until the largest observed interval and the relevant quality tradeoff are known.
+
+## Development
 
 ```bash
 just format
@@ -115,6 +228,23 @@ just test-cov
 just check
 ```
 
-`just check`はformat、SwiftLint、warnings-as-errors、core line coverage 90%以上、secretlint、release `.app`の署名検証をまとめて実行します。テストはネットワーク、TCCプロンプト、実音声出力を要求しません。
+`just check` runs strict formatting, SwiftLint, a warnings-as-errors build, tests and coverage, secret
+scanning, `justfile` validation, and release app build/signing. Default tests do not require network
+access, microphone permission, TCC prompts, a GPU, or audible output.
 
-設計判断は[設計仕様](docs/superpowers/specs/2026-08-12-low-latency-voicechanger-design.md)、実装順序は[実装計画](docs/superpowers/plans/2026-08-12-low-latency-voicechanger.md)、実機の不足条件は[初期検証記録](docs/validation/2026-08-12-initial-baseline.md)に残します。
+Source layout:
+
+- `Sources/IrodoriVoiceChangerCore/`: platform-neutral contracts, pipeline, telemetry, and reports
+- `Sources/IrodoriVoiceChangerMacOS/`: Apple Speech, AVFAudio, and CoreAudio adapters
+- `Sources/IrodoriVoiceChangerCLI/`: commands and composition root
+- `Sources/IrodoriVoiceChangerSmartTurn/`: native feature extraction and ONNX inference
+- `Tests/`: deterministic unit and parity tests
+- `docs/superpowers/`: accepted designs and implementation plans
+- `docs/validation/`: privacy-safe experiment records
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+## License
+
+The application source is available under the [MIT License](LICENSE). The bundled Pipecat Smart Turn
+model carries its own [BSD 2-Clause notice](Sources/IrodoriVoiceChangerSmartTurn/Resources/PIPECAT-LICENSE.txt).

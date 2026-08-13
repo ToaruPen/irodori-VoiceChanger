@@ -22,7 +22,7 @@
 - Reference: `docs/validation/2026-08-13-early-finalize-shadow.md`
 - Reference: `docs/validation/2026-08-13-smart-turn-native-replay.md`
 
-- [ ] **Step 1: Replace the README structure**
+- [x] **Step 1: Replace the README structure**
 
 Use these headings in this order:
 
@@ -45,11 +45,11 @@ Use these headings in this order:
 
 State near the top that the project is an experimental macOS 26 PoC, the normal path uses only Apple Speech final results, and shadow modes do not change audible output unless a command explicitly says otherwise.
 
-- [ ] **Step 2: Document setup and normal operation**
+- [x] **Step 2: Document setup and normal operation**
 
 Include copy-pasteable commands for `just bootstrap`, `just build-app`, `config init`, `devices`, `config validate`, `doctor`, `doctor --synthesize`, `just run`, replay variants, and reports. Document `irodori.base_url` and `audio.output_device_uid`, including HTTPS and loopback HTTP constraints and the no-speaker-fallback behavior.
 
-- [ ] **Step 3: Consolidate the experiments**
+- [x] **Step 3: Consolidate the experiments**
 
 Use one table with these rows and boundaries:
 
@@ -63,7 +63,7 @@ Use one table with these rows and boundaries:
 
 Follow the table with the validated conclusion that fixed-WAV promise does not establish safe live semantic endpointing, so active Smart Turn finalization is not exposed.
 
-- [ ] **Step 4: Document privacy, limitations, and evidence**
+- [x] **Step 4: Document privacy, limitations, and evidence**
 
 List the telemetry fields at category level and explicitly exclude transcripts, input/generated audio, voice IDs, device IDs, endpoints, credentials, and response bodies. State that the server currently returns audio only after full synthesis, hot-unplug recovery is not implemented, and 12-step quality is retained. Link the three experiment validation reports and the baseline report rather than duplicating their full measurements.
 
@@ -72,7 +72,7 @@ List the telemetry fields at category level and explicitly exclude transcripts, 
 **Files:**
 - Verify: `README.md`
 
-- [ ] **Step 1: Check commands, flags, and configuration names**
+- [x] **Step 1: Check commands, flags, and configuration names**
 
 Run:
 
@@ -83,7 +83,7 @@ rg -n 'base_url|output_device_uid|num_steps|schedule|style' README.md config/iro
 
 Expected: every README option and configuration field has a matching implementation or versioned example; `--smart-turn-finalize` is absent from the README.
 
-- [ ] **Step 2: Check public prose and links**
+- [x] **Step 2: Check public prose and links**
 
 Run:
 
@@ -94,7 +94,7 @@ rg -n 'TBD|TODO|PLACEHOLDER|--smart-turn-finalize' README.md
 
 Expected: both commands return no matches. Manually verify every relative documentation link resolves inside the repository.
 
-- [ ] **Step 3: Run repository gates**
+- [x] **Step 3: Run repository gates**
 
 Run:
 
@@ -105,7 +105,7 @@ git diff --check
 
 Expected: formatting, lint, warnings-as-errors build, all tests, coverage, secret scanning, justfile validation, release app build/signing, and whitespace validation pass.
 
-- [ ] **Step 4: Commit the README change**
+- [x] **Step 4: Commit the README change**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-08-13-public-readme.md
