@@ -5,6 +5,120 @@ import Testing
 
 @Suite("TelemetryTests")
 struct TelemetryTests {
+    @Test
+    func semanticEndpointTelemetryRoundTripsWithoutSpeechContent() throws {
+        let event = TelemetryEvent(
+            sessionID: UUID(),
+            utteranceID: UUID(),
+            timestampNanoseconds: 42,
+            name: .semanticEndpointCompleted,
+            stage: .speech,
+            metrics: .init(
+                durationMilliseconds: 18,
+                semanticProbabilityBucket: 3,
+                semanticTurnComplete: true
+            )
+        )
+
+        let data = try JSONEncoder.telemetry.encode(event)
+        let decoded = try JSONDecoder.telemetry.decode(TelemetryEvent.self, from: data)
+        let json = try #require(String(data: data, encoding: .utf8)).lowercased()
+
+        #expect(decoded == event)
+        #expect(json.contains("semantic_endpoint_completed"))
+        #expect(json.contains("semantic_probability_bucket"))
+        #expect(json.contains("semantic_turn_complete"))
+        for forbidden in [
+            "audio", "transcript", "text", "feature", "path", "hash", "voice", "device",
+            "url", "http",
+        ] {
+            #expect(!json.contains(forbidden))
+        }
+    }
+
+    @Test
+    func endpointShadowTelemetryRoundTripsWithoutContent() throws {
+        let event = TelemetryEvent(
+            sessionID: UUID(),
+            utteranceID: UUID(),
+            timestampNanoseconds: 42,
+            name: .shadowEndpointFinalComparison,
+            stage: .commit,
+            metrics: .init(
+                durationMilliseconds: 800,
+                endpointSilenceMilliseconds: 300,
+                shadowCandidatePresent: true,
+                shadowCandidateMatchRatio: 1,
+                shadowFinalCoverageRatio: 0.8
+            )
+        )
+
+        let data = try JSONEncoder.telemetry.encode(event)
+        let decoded = try JSONDecoder.telemetry.decode(TelemetryEvent.self, from: data)
+        let json = try #require(String(data: data, encoding: .utf8)).lowercased()
+
+        #expect(decoded == event)
+        #expect(json.contains("shadow_endpoint_final_comparison"))
+        #expect(json.contains("endpoint_silence_milliseconds"))
+        for forbidden in ["transcript", "candidate_text", "final_text", "hash", "path"] {
+            #expect(!json.contains(forbidden))
+        }
+    }
+
+    @Test
+    func shadowSynthesisTelemetryRoundTripsWithoutContentFields() throws {
+        let event = TelemetryEvent(
+            sessionID: UUID(),
+            utteranceID: UUID(),
+            timestampNanoseconds: 42,
+            name: .shadowSynthesisCompleted,
+            stage: .irodori,
+            metrics: .init(
+                durationMilliseconds: 700,
+                audioDurationMilliseconds: 900,
+                serverDurationMilliseconds: 600,
+                byteCount: 12_345,
+                samplingSteps: 12
+            )
+        )
+
+        let data = try JSONEncoder.telemetry.encode(event)
+        let decoded = try JSONDecoder.telemetry.decode(TelemetryEvent.self, from: data)
+        let json = try #require(String(data: data, encoding: .utf8)).lowercased()
+
+        #expect(decoded == event)
+        for forbidden in ["text", "length", "hash", "path", "url", "voice", "device"] {
+            #expect(!json.contains(forbidden))
+        }
+    }
+
+    @Test
+    func shadowComparisonTelemetryContainsNoSpeechContent() throws {
+        let event = TelemetryEvent(
+            sessionID: UUID(),
+            utteranceID: UUID(),
+            timestampNanoseconds: 42,
+            name: .shadowFinalComparison,
+            stage: .commit,
+            metrics: .init(
+                shadowCandidatePresent: true,
+                shadowCandidateMatchRatio: 0.75,
+                shadowFinalCoverageRatio: 0.5
+            )
+        )
+
+        let json = try #require(
+            String(data: try JSONEncoder.telemetry.encode(event), encoding: .utf8))
+
+        #expect(json.contains("shadow_final_comparison"))
+        #expect(json.contains("shadow_candidate_match_ratio"))
+        #expect(!json.contains("transcript"))
+        #expect(!json.contains("candidate_text"))
+        #expect(!json.contains("final_text"))
+        #expect(!json.contains("text_length"))
+        #expect(!json.contains("hash"))
+    }
+
     private let sessionID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1))
     private let utteranceID = UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2))
 

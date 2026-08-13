@@ -10,15 +10,36 @@ let package = Package(
         .library(name: "IrodoriVoiceChangerMacOS", targets: ["IrodoriVoiceChangerMacOS"]),
         .executable(name: "irodori-voicechanger", targets: ["IrodoriVoiceChangerCLI"]),
     ],
+    dependencies: [
+        .package(
+            url: "https://github.com/microsoft/onnxruntime-swift-package-manager",
+            exact: "1.24.2"
+        )
+    ],
     targets: [
         .target(name: "IrodoriVoiceChangerCore"),
         .target(
             name: "IrodoriVoiceChangerMacOS",
             dependencies: ["IrodoriVoiceChangerCore"]
         ),
+        .target(
+            name: "IrodoriVoiceChangerSmartTurn",
+            dependencies: [
+                "IrodoriVoiceChangerCore",
+                .product(
+                    name: "onnxruntime",
+                    package: "onnxruntime-swift-package-manager"
+                ),
+            ],
+            resources: [.copy("Resources")]
+        ),
         .executableTarget(
             name: "IrodoriVoiceChangerCLI",
-            dependencies: ["IrodoriVoiceChangerCore", "IrodoriVoiceChangerMacOS"]
+            dependencies: [
+                "IrodoriVoiceChangerCore",
+                "IrodoriVoiceChangerMacOS",
+                "IrodoriVoiceChangerSmartTurn",
+            ]
         ),
         .testTarget(
             name: "IrodoriVoiceChangerCoreTests",
@@ -27,6 +48,10 @@ let package = Package(
         .testTarget(
             name: "IrodoriVoiceChangerMacOSTests",
             dependencies: ["IrodoriVoiceChangerCore", "IrodoriVoiceChangerMacOS"]
+        ),
+        .testTarget(
+            name: "IrodoriVoiceChangerSmartTurnTests",
+            dependencies: ["IrodoriVoiceChangerSmartTurn"]
         ),
     ],
     swiftLanguageModes: [.v6]

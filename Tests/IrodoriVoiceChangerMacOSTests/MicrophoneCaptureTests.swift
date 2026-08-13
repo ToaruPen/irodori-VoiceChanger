@@ -30,6 +30,31 @@ struct MicrophoneCaptureTests {
 
         #expect(invoked.value)
     }
+
+    @Test
+    func conversionFailureCountsAsDroppedInput() throws {
+        let inputFormat = try #require(
+            AVAudioFormat(
+                commonFormat: .pcmFormatFloat32, sampleRate: 48_000, channels: 1,
+                interleaved: false))
+        let analysisFormat = try #require(
+            AVAudioFormat(
+                commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1,
+                interleaved: false))
+        let buffer = try #require(
+            AVAudioPCMBuffer(pcmFormat: inputFormat, frameCapacity: 16))
+        let drops = LockedCounter()
+
+        let converted = makeAnalysisBuffer(
+            buffer,
+            analysisFormat: analysisFormat,
+            converter: nil,
+            onDrop: { drops.increment() }
+        )
+
+        #expect(converted == nil)
+        #expect(drops.value == 1)
+    }
 }
 
 private struct SendableTapHandler: @unchecked Sendable {
@@ -58,5 +83,18 @@ private final class LockedFlag: @unchecked Sendable {
 
     func set() {
         lock.withLock { storedValue = true }
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue = 0
+
+    var value: Int {
+        lock.withLock { storedValue }
+    }
+
+    func increment() {
+        lock.withLock { storedValue += 1 }
     }
 }

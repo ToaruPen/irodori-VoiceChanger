@@ -1,5 +1,3 @@
-import AVFAudio
-import Darwin
 import Foundation
 import IrodoriVoiceChangerCore
 import IrodoriVoiceChangerMacOS
@@ -38,15 +36,44 @@ enum CLIApplication {
             let report = await runDoctor(path: path, synthesize: synthesize)
             printDoctor(report)
             return report.exitCode
-        case .run(let path, let showTranscript):
-            try await runLive(path: path, showTranscript: showTranscript)
-            return 0
-        case .replay(let input, let path, let synthesize, let liveOutput):
-            try await runReplay(
-                input: input,
+        case .run(
+            let path,
+            let showTranscript,
+            let shadowSynthesizePrefix,
+            let endpointShadowMilliseconds,
+            let shadowSmartTurn
+        ):
+            try await runLive(
                 path: path,
-                synthesize: synthesize,
-                liveOutput: liveOutput
+                options: LiveOptions(
+                    showTranscript: showTranscript,
+                    shadowSynthesizePrefix: shadowSynthesizePrefix,
+                    endpointShadowMilliseconds: endpointShadowMilliseconds,
+                    shadowSmartTurn: shadowSmartTurn
+                )
+            )
+            return 0
+        case .replay(
+            let input,
+            let path,
+            let synthesize,
+            let liveOutput,
+            let shadowSynthesizePrefix,
+            let endpointShadowMilliseconds,
+            let earlyFinalizeShadowMilliseconds,
+            let smartTurnShadow
+        ):
+            try await runReplay(
+                path: path,
+                options: ReplayOptions(
+                    input: input,
+                    synthesize: synthesize,
+                    liveOutput: liveOutput,
+                    shadowSynthesizePrefix: shadowSynthesizePrefix,
+                    endpointShadowMilliseconds: endpointShadowMilliseconds,
+                    earlyFinalizeShadowMilliseconds: earlyFinalizeShadowMilliseconds,
+                    smartTurnShadow: smartTurnShadow
+                )
             )
             return 0
         case .report(let session, let path, let json):
@@ -68,164 +95,24 @@ enum CLIApplication {
         }
     }
 
-    private static func runLive(path: String?, showTranscript: Bool) async throws {
-        let configuration = try await loadRuntimeConfiguration(path: path)
-        let recorder = telemetryRecorder(configuration)
-        let clock = SystemMonotonicClock()
-        let sessionID = UUID()
-        await recordSession(.sessionStarted, sessionID: sessionID, recorder: recorder, clock: clock)
-        do {
-            try await runPreparedLive(
-                configuration: configuration,
-                showTranscript: showTranscript,
-                recorder: recorder,
-                clock: clock,
-                sessionID: sessionID
-            )
-        } catch {
-            _ = await recorder.record(
-                TelemetryEvent(
-                    sessionID: sessionID,
-                    utteranceID: nil,
-                    timestampNanoseconds: clock.nowNanoseconds(),
-                    name: .operationFailed,
-                    stage: .lifecycle,
-                    errorCode: stableCode(for: error)
-                ))
-            await recordSession(
-                .sessionStopped, sessionID: sessionID, recorder: recorder, clock: clock)
-            throw error
-        }
-        await recordSession(.sessionStopped, sessionID: sessionID, recorder: recorder, clock: clock)
-    }
-
-    private static func runPreparedLive(
-        configuration: AppConfiguration,
-        showTranscript: Bool,
-        recorder: any TelemetryRecording,
-        clock: any MonotonicClock,
-        sessionID: UUID
-    ) async throws {
-        var started = clock.nowNanoseconds()
-        guard await requestRequiredPermissions() else {
-            throw CLIExecutionError.permissionDenied
-        }
-        await recordPreflight(
-            stage: .lifecycle,
-            since: started,
-            sessionID: sessionID,
-            recorder: recorder,
-            clock: clock
-        )
-        started = clock.nowNanoseconds()
-        let speech = try await AppleSpeechSession.prepare(
-            localeIdentifier: configuration.speech.localeIdentifier,
-            sensitivity: configuration.speech.detectorSensitivity
-        )
-        await recordPreflight(
-            stage: .speech, since: started, sessionID: sessionID, recorder: recorder, clock: clock)
-        started = clock.nowNanoseconds()
-        let device = try AudioDeviceCatalog.current().resolveOutput(
-            uid: configuration.audio.outputDeviceUID)
-        let player = try await CoreAudioPlayer(
-            device: device,
-            maximumWAVBytes: configuration.audio.maximumWAVBytes,
-            maximumClipSeconds: configuration.audio.maximumClipSeconds
-        )
-        await recordPreflight(
-            stage: .coreAudio, since: started, sessionID: sessionID, recorder: recorder,
-            clock: clock)
-        started = clock.nowNanoseconds()
-        let synthesizer = try await prepareSynthesizer(configuration)
-        await recordPreflight(
-            stage: .irodori, since: started, sessionID: sessionID, recorder: recorder, clock: clock)
-        let pipeline = VoiceChangerPipeline(
-            sessionID: sessionID,
-            synthesizer: synthesizer,
-            player: player,
-            telemetry: recorder,
-            clock: clock,
-            maximumPendingSynthesis: configuration.queues.pendingSynthesis,
-            maximumPendingPlayback: configuration.queues.pendingPlayback
-        )
-        let microphone = await MicrophoneCapture()
-        let microphoneInput = try await microphone.start(
-            analysisFormat: speech.audioFormat,
-            bufferFrames: AVAudioFrameCount(configuration.speech.inputBufferFrames)
-        )
-        let events = try await speech.events(from: microphoneInput.stream)
-        await recordSession(.sessionReady, sessionID: sessionID, recorder: recorder, clock: clock)
-        print("ready: press Control-C to stop")
-
-        let signalTask = Task {
-            for await _ in TerminationSignals.stream() {
-                await microphone.stop()
-                await speech.cancel()
-                await pipeline.cancel()
-                await player.stop()
-                break
-            }
-        }
-        defer { signalTask.cancel() }
-        let restartFailures = await pipeline.restartFailures()
-        do {
-            try await withThrowingTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    for try await event in events {
-                        if showTranscript { printTranscript(event) }
-                        await pipeline.handle(event)
-                    }
-                }
-                group.addTask {
-                    for await failure in restartFailures {
-                        throw PipelineOperationError(failure)
-                    }
-                }
-                defer { group.cancelAll() }
-                _ = try await group.next()
-            }
-        } catch is CancellationError {
-            // Normal shutdown through the signal task.
-        } catch {
-            await microphone.stop()
-            await speech.cancel()
-            await pipeline.stop()
-            await player.stop()
-            throw error
-        }
-        await pipeline.stop()
-        await player.stop()
-        if microphoneInput.droppedBufferCount > 0 {
-            await recordInputDrops(
-                microphoneInput.droppedBufferCount,
-                sessionID: sessionID,
-                recorder: recorder,
-                clock: clock
-            )
-        }
-        if let failure = await pipeline.failureRequiringRestart() {
-            throw PipelineOperationError(failure)
-        }
-    }
-
     static func runReplay(
-        input: String,
         path: String?,
-        synthesize: Bool,
-        liveOutput: Bool
+        options: ReplayOptions
     ) async throws {
-        guard !liveOutput || synthesize else { throw CLIUsageError() }
+        guard !options.liveOutput || options.synthesize else { throw CLIUsageError() }
         let configuration = try await loadRuntimeConfiguration(path: path)
+        try validateShadowSynthesis(
+            enabled: options.shadowSynthesizePrefix,
+            policy: configuration.speech.commitPolicy
+        )
         let recorder = telemetryRecorder(configuration)
         let clock = SystemMonotonicClock()
         let sessionID = UUID()
         await recordSession(.sessionStarted, sessionID: sessionID, recorder: recorder, clock: clock)
         do {
             try await performReplay(
-                input: input,
+                options: options,
                 configuration: configuration,
-                synthesize: synthesize,
-                liveOutput: liveOutput,
                 recorder: recorder,
                 clock: clock,
                 sessionID: sessionID
@@ -271,13 +158,6 @@ enum CLIApplication {
         )
     }
 
-    private static func requestRequiredPermissions() async -> Bool {
-        let microphone =
-            AppPermissions.microphone == .authorized
-            ? .authorized : await AppPermissions.requestMicrophone()
-        return microphone == .authorized
-    }
-
     static func telemetryRecorder(
         _ configuration: AppConfiguration
     ) -> SessionTelemetryRecorder {
@@ -291,6 +171,66 @@ enum CLIApplication {
                 FileHandle.standardError.write(Data("telemetry_unavailable\n".utf8))
             }
         )
+    }
+
+    static func shadowMonitor(
+        _ policy: CommitPolicyConfiguration,
+        _ sessionID: UUID,
+        _ recorder: any TelemetryRecording,
+        _ clock: any MonotonicClock,
+        candidateHandler: (any StablePrefixCandidateHandling)? = nil
+    ) -> StablePrefixShadowMonitor? {
+        guard policy.mode == .stablePrefix else { return nil }
+        return StablePrefixShadowMonitor(
+            sessionID: sessionID,
+            minimumObservations: policy.minimumObservations,
+            minimumStableMilliseconds: policy.minimumStableMilliseconds,
+            telemetry: recorder,
+            clock: clock,
+            candidateHandler: candidateHandler
+        )
+    }
+
+    static func endpointShadowQueue(
+        _ silenceMilliseconds: Int?,
+        _ sessionID: UUID,
+        _ recorder: any TelemetryRecording,
+        _ clock: any MonotonicClock,
+        candidateHandler: (any EndpointCandidateHandling)? = nil
+    ) -> EndpointShadowQueue? {
+        guard let silenceMilliseconds else { return nil }
+        return EndpointShadowQueue(
+            monitor: EndpointShadowMonitor(
+                sessionID: sessionID,
+                silenceMilliseconds: silenceMilliseconds,
+                telemetry: recorder,
+                candidateHandler: candidateHandler
+            ),
+            clock: clock
+        )
+    }
+
+    static func endpointActivityObserver(
+        _ queue: EndpointShadowQueue?
+    ) -> (@Sendable (AudioActivitySample) -> Void)? {
+        guard let queue else { return nil }
+        return { sample in
+            queue.observeAudio(
+                EndpointAudioFrame(
+                    isSpeech: sample.isSpeech,
+                    durationMilliseconds: sample.durationMilliseconds,
+                    sampleRate: sample.sampleRate,
+                    samples: sample.samples
+                )
+            )
+        }
+    }
+
+    static func validateShadowSynthesis(
+        enabled: Bool,
+        policy: CommitPolicyConfiguration
+    ) throws {
+        guard !enabled || policy.mode == .stablePrefix else { throw CLIUsageError() }
     }
 
     static func defaultTelemetryRecorder() -> SessionTelemetryRecorder {
@@ -373,23 +313,6 @@ enum CLIApplication {
             ))
     }
 
-    private static func recordInputDrops(
-        _ count: Int,
-        sessionID: UUID,
-        recorder: any TelemetryRecording,
-        clock: any MonotonicClock
-    ) async {
-        _ = await recorder.record(
-            TelemetryEvent(
-                sessionID: sessionID,
-                utteranceID: nil,
-                timestampNanoseconds: clock.nowNanoseconds(),
-                name: .inputDropped,
-                stage: .speech,
-                metrics: .init(dropCount: count)
-            ))
-    }
-
     static func recordPreflight(
         stage: PipelineStage,
         since start: UInt64,
@@ -434,14 +357,6 @@ enum CLIApplication {
         }
     }
 
-    private static func printTranscript(_ event: SpeechEvent) {
-        switch event {
-        case .partial(_, let text, _): print("partial\t\(text)")
-        case .final(_, let text, _): print("final\t\(text)")
-        case .speechStarted, .speechEnded, .timing: break
-        }
-    }
-
     static func stableCode(for error: Error) -> StableErrorCode {
         if let pipelineError = error as? PipelineOperationError {
             return pipelineError.code
@@ -468,8 +383,11 @@ enum CLIApplication {
           config validate [--path PATH]
           doctor [--path PATH] [--synthesize]
           devices
-          run [--path PATH] [--show-transcript]
+          run [--path PATH] [--show-transcript] [--shadow-synthesize-prefix]
+              [--shadow-endpoint-ms 100...3000] [--shadow-smart-turn]
           replay INPUT.wav [--path PATH] [--synthesize] [--live-output]
+              [--shadow-synthesize-prefix] [--shadow-endpoint-ms 100...3000]
+              [--shadow-early-finalize-ms 100...3000] [--shadow-smart-turn]
           report [SESSION|latest] [--path PATH] [--json]
         """
 }

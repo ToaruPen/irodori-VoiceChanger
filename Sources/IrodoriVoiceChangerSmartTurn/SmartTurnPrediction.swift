@@ -1,0 +1,4 @@
+import IrodoriVoiceChangerCore
+
+public typealias SmartTurnPrediction = SemanticTurnPrediction
+public typealias SmartTurnPredictionError = SemanticTurnPredictionError

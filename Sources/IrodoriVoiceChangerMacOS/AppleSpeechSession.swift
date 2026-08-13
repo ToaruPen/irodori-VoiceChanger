@@ -298,6 +298,10 @@ public actor AppleSpeechSession {
         await analyzer.cancelAndFinishNow()
         running = false
     }
+
+    public func finalizeConsumedAudio() async throws {
+        try await analyzer.finalize(through: nil)
+    }
 }
 
 func yieldSpeechEvent(

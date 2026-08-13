@@ -14,6 +14,28 @@ public enum TelemetryEventName: String, Codable, CaseIterable, Sendable {
     case utteranceCommitted = "utterance_committed"
     case utteranceRewriteRejected = "utterance_rewrite_rejected"
     case utteranceDropped = "utterance_dropped"
+    case shadowPrefixCandidate = "shadow_prefix_candidate"
+    case shadowPrefixRewrite = "shadow_prefix_rewrite"
+    case shadowPrefixRollback = "shadow_prefix_rollback"
+    case shadowFinalComparison = "shadow_final_comparison"
+    case shadowEndpointEnabled = "shadow_endpoint_enabled"
+    case shadowEndpointCandidate = "shadow_endpoint_candidate"
+    case shadowEndpointSpeechResumed = "shadow_endpoint_speech_resumed"
+    case shadowEndpointFinalComparison = "shadow_endpoint_final_comparison"
+    case shadowEndpointOverflow = "shadow_endpoint_overflow"
+    case shadowEndpointFinalizeRequested = "shadow_endpoint_finalize_requested"
+    case shadowEndpointFinalizeCompleted = "shadow_endpoint_finalize_completed"
+    case shadowEndpointFinalizeFailed = "shadow_endpoint_finalize_failed"
+    case semanticEndpointRequested = "semantic_endpoint_requested"
+    case semanticEndpointCompleted = "semantic_endpoint_completed"
+    case semanticEndpointFailed = "semantic_endpoint_failed"
+    case shadowSynthesisStarted = "shadow_synthesis_started"
+    case shadowSynthesisHandshake = "shadow_synthesis_handshake"
+    case shadowSynthesisFirstAudio = "shadow_synthesis_first_audio"
+    case shadowSynthesisCompleted = "shadow_synthesis_completed"
+    case shadowSynthesisCancelled = "shadow_synthesis_cancelled"
+    case shadowSynthesisFailed = "shadow_synthesis_failed"
+    case shadowSynthesisFinalComparison = "shadow_synthesis_final_comparison"
     case requestStarted = "request_started"
     case streamHandshake = "stream_handshake"
     case firstAudioPayload = "first_audio_payload"
@@ -38,6 +60,12 @@ public struct TelemetryMetrics: Codable, Equatable, Sendable {
     public let sourceLatencyMilliseconds: Double?
     public let dropCount: Int?
     public let telemetryFailureCount: Int?
+    public let endpointSilenceMilliseconds: Int?
+    public let shadowCandidatePresent: Bool?
+    public let shadowCandidateMatchRatio: Double?
+    public let shadowFinalCoverageRatio: Double?
+    public let semanticProbabilityBucket: Int?
+    public let semanticTurnComplete: Bool?
 
     public init(
         durationMilliseconds: Double? = nil,
@@ -49,7 +77,13 @@ public struct TelemetryMetrics: Codable, Equatable, Sendable {
         samplingSteps: Int? = nil,
         sourceLatencyMilliseconds: Double? = nil,
         dropCount: Int? = nil,
-        telemetryFailureCount: Int? = nil
+        telemetryFailureCount: Int? = nil,
+        endpointSilenceMilliseconds: Int? = nil,
+        shadowCandidatePresent: Bool? = nil,
+        shadowCandidateMatchRatio: Double? = nil,
+        shadowFinalCoverageRatio: Double? = nil,
+        semanticProbabilityBucket: Int? = nil,
+        semanticTurnComplete: Bool? = nil
     ) {
         self.durationMilliseconds = durationMilliseconds
         self.audioDurationMilliseconds = audioDurationMilliseconds
@@ -61,6 +95,12 @@ public struct TelemetryMetrics: Codable, Equatable, Sendable {
         self.sourceLatencyMilliseconds = sourceLatencyMilliseconds
         self.dropCount = dropCount
         self.telemetryFailureCount = telemetryFailureCount
+        self.endpointSilenceMilliseconds = endpointSilenceMilliseconds
+        self.shadowCandidatePresent = shadowCandidatePresent
+        self.shadowCandidateMatchRatio = shadowCandidateMatchRatio
+        self.shadowFinalCoverageRatio = shadowFinalCoverageRatio
+        self.semanticProbabilityBucket = semanticProbabilityBucket
+        self.semanticTurnComplete = semanticTurnComplete
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -74,6 +114,12 @@ public struct TelemetryMetrics: Codable, Equatable, Sendable {
         case sourceLatencyMilliseconds = "source_latency_milliseconds"
         case dropCount = "drop_count"
         case telemetryFailureCount = "telemetry_failure_count"
+        case endpointSilenceMilliseconds = "endpoint_silence_milliseconds"
+        case shadowCandidatePresent = "shadow_candidate_present"
+        case shadowCandidateMatchRatio = "shadow_candidate_match_ratio"
+        case shadowFinalCoverageRatio = "shadow_final_coverage_ratio"
+        case semanticProbabilityBucket = "semantic_probability_bucket"
+        case semanticTurnComplete = "semantic_turn_complete"
     }
 }
 
