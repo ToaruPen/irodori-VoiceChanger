@@ -55,18 +55,30 @@ struct CLITests {
 
     @Test
     func replayEndpointFailurePreservesPipelineError() async {
+        let sessionID = UUID()
+        let recorder = NoopTelemetryRecorder()
+        let clock = SystemMonotonicClock()
         let handler = EndpointFinalizationHandler(
-            sessionID: UUID(),
-            telemetry: NoopTelemetryRecorder(),
-            clock: SystemMonotonicClock(),
+            sessionID: sessionID,
+            telemetry: recorder,
+            clock: clock,
             operation: { throw CLIEndpointTestError.failed }
         )
         _ = await handler.handleEndpointCandidate(utteranceID: UUID())
+        let events = AsyncThrowingStream<SpeechEvent, Error> { $0.finish() }
 
         await #expect(throws: PipelineOperationError(.speechUnavailable)) {
-            try await CLIApplication.checkReplayEndpointFailures(
-                finalizationHandler: handler,
-                semanticHandler: nil
+            try await CLIApplication.consumeSpeechOnlyReplay(
+                events: events,
+                shadow: nil,
+                endpoint: .init(
+                    finalizationHandler: handler,
+                    semanticHandler: nil,
+                    queue: nil
+                ),
+                recorder: recorder,
+                clock: clock,
+                sessionID: sessionID
             )
         }
     }

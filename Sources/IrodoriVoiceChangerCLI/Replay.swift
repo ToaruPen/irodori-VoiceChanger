@@ -21,7 +21,7 @@ extension CLIApplication {
         let player: any AudioPlaying
     }
 
-    private struct ReplayEndpointResources {
+    struct ReplayEndpointResources {
         let finalizationHandler: EndpointFinalizationHandler?
         let semanticHandler: SemanticEndpointHandler?
         let queue: EndpointShadowQueue?
@@ -106,35 +106,44 @@ extension CLIApplication {
                 configuration.speech.commitPolicy, sessionID, recorder, clock)
             await recordSession(
                 .sessionReady, sessionID: sessionID, recorder: recorder, clock: clock)
-            do {
-                for try await event in events {
-                    await shadow?.observe(event)
-                    endpointShadow?.observe(event)
-                    await recordSpeechOnly(
-                        event, sessionID: sessionID, recorder: recorder, clock: clock)
-                }
-            } catch {
-                await shadow?.cancel()
-                await endpointShadow?.cancel()
-                throw StagedRuntimeError(stage: .speech, code: .speechUnavailable)
-            }
-            await shadow?.stop()
-            await endpointShadow?.stop()
-            try await checkReplayEndpointFailures(
-                finalizationHandler: endpoint.finalizationHandler,
-                semanticHandler: endpoint.semanticHandler
+            try await consumeSpeechOnlyReplay(
+                events: events,
+                shadow: shadow,
+                endpoint: endpoint,
+                recorder: recorder,
+                clock: clock,
+                sessionID: sessionID
             )
         }
     }
 
-    static func checkReplayEndpointFailures(
-        finalizationHandler: EndpointFinalizationHandler?,
-        semanticHandler: SemanticEndpointHandler?
+    static func consumeSpeechOnlyReplay(
+        events: AsyncThrowingStream<SpeechEvent, Error>,
+        shadow: StablePrefixShadowMonitor?,
+        endpoint: ReplayEndpointResources,
+        recorder: any TelemetryRecording,
+        clock: any MonotonicClock,
+        sessionID: UUID
     ) async throws {
-        if let failure = await finalizationHandler?.failureRequiringStop() {
+        let endpointShadow = endpoint.queue
+        do {
+            for try await event in events {
+                await shadow?.observe(event)
+                endpointShadow?.observe(event)
+                await recordSpeechOnly(
+                    event, sessionID: sessionID, recorder: recorder, clock: clock)
+            }
+        } catch {
+            await shadow?.cancel()
+            await endpointShadow?.cancel()
+            throw StagedRuntimeError(stage: .speech, code: .speechUnavailable)
+        }
+        await shadow?.stop()
+        await endpointShadow?.stop()
+        if let failure = await endpoint.finalizationHandler?.failureRequiringStop() {
             throw PipelineOperationError(failure)
         }
-        if let failure = await semanticHandler?.failureRequiringStop() {
+        if let failure = await endpoint.semanticHandler?.failureRequiringStop() {
             throw PipelineOperationError(failure)
         }
     }
